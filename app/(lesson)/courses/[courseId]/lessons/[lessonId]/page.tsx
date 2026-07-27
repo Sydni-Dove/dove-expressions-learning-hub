@@ -1,0 +1,91 @@
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserAndRoles } from "@/lib/roles";
+import LessonExperience from "@/components/lesson/LessonExperience";
+import LessonReflectionForm from "@/components/LessonReflectionForm";
+import MarkCompleteButton from "@/components/MarkCompleteButton";
+import type { LessonBlock } from "@/lib/types";
+
+export default async function LessonPage({ params }: { params: { courseId: string; lessonId: string } }) {
+  const supabase = createClient();
+  const { user } = await getCurrentUserAndRoles();
+  if (!user) redirect("/login");
+
+  const { data: lesson } = await supabase
+    .from("dp_lessons")
+    .select("id,title,subtitle,estimated_duration_minutes,module_id,order_index,status")
+    .eq("id", params.lessonId)
+    .maybeSingle();
+  if (!lesson) notFound();
+
+  const { data: module_ } = await supabase.from("dp_modules").select("id,course_id,order_index").eq("id", lesson.module_id).maybeSingle();
+  if (!module_ || module_.course_id !== params.courseId) notFound();
+
+  const { data: course } = await supabase.from("dp_courses").select("id,title,instructor_id").eq("id", params.courseId).maybeSingle();
+  if (!course) notFound();
+
+  let instructorName: string | null = null;
+  if (course.instructor_id) {
+    const { data: instructor } = await supabase.from("profiles").select("full_name").eq("id", course.instructor_id).maybeSingle();
+    instructorName = instructor?.full_name ?? null;
+  }
+
+  const [{ data: blocksRaw }, { data: progress }, { data: bookmark }, { data: reflection }] = await Promise.all([
+    supabase.from("dp_lesson_blocks").select("id,lesson_id,block_type,order_index,content").eq("lesson_id", lesson.id).order("order_index"),
+    supabase.from("dp_lesson_progress").select("status").eq("user_id", user!.id).eq("lesson_id", lesson.id).maybeSingle(),
+    supabase.from("dp_lesson_bookmarks").select("id").eq("user_id", user!.id).eq("lesson_id", lesson.id).maybeSingle(),
+    supabase.from("dp_lesson_reflections").select("*").eq("lesson_id", lesson.id).eq("student_id", user!.id).maybeSingle()
+  ]);
+  const blocks = (blocksRaw ?? []) as LessonBlock[];
+
+  // Position this lesson within the whole course (across all modules) for "Lesson X of Y"
+  // and the header's course-wide progress bar — real numbers, not hard-coded to Episode 2.
+  const { data: allModules } = await supabase.from("dp_modules").select("id,order_index").eq("course_id", params.courseId).order("order_index");
+  const moduleIds = (allModules ?? []).map((m) => m.id);
+  const { data: allLessons } = moduleIds.length
+    ? await supabase.from("dp_lessons").select("id,module_id,order_index,status").in("module_id", moduleIds).eq("status", "published")
+    : { data: [] };
+  const moduleOrder = new Map((allModules ?? []).map((m) => [m.id, m.order_index]));
+  const flattened = [...(allLessons ?? [])].sort((a, b) => {
+    const mo = (moduleOrder.get(a.module_id) ?? 0) - (moduleOrder.get(b.module_id) ?? 0);
+    return mo !== 0 ? mo : a.order_index - b.order_index;
+  });
+  const lessonPosition = Math.max(1, flattened.findIndex((l) => l.id === lesson.id) + 1);
+  const totalLessons = flattened.length || 1;
+
+  const { data: progressRows } = await supabase
+    .from("dp_lesson_progress")
+    .select("lesson_id,status")
+    .eq("user_id", user!.id)
+    .in("lesson_id", flattened.map((l) => l.id).length ? flattened.map((l) => l.id) : ["00000000-0000-0000-0000-000000000000"]);
+  const completedCount = (progressRows ?? []).filter((p) => p.status === "completed").length;
+  const courseProgressPercent = Math.round((completedCount / totalLessons) * 100);
+
+  const isComplete = progress?.status === "completed";
+  const statusLabel = isComplete ? "Teaching complete" : progress?.status === "in_progress" ? "In progress" : "Not started";
+  const durationLabel = lesson.estimated_duration_minutes ? `${lesson.estimated_duration_minutes} min` : null;
+  const reflectionStarted = !!reflection && Object.entries(reflection).some(([k, v]) => typeof v === "string" && !["id", "lesson_id", "student_id"].includes(k) && v.trim().length > 0);
+
+  return (
+    <LessonExperience
+      lessonId={lesson.id}
+      lessonTitle={lesson.title}
+      lessonSubtitle={lesson.subtitle}
+      eyebrow={`${course.title} · Lesson ${lessonPosition} of ${totalLessons}`}
+      courseId={course.id}
+      courseTitle={course.title}
+      instructorName={instructorName}
+      durationLabel={durationLabel}
+      statusLabel={statusLabel}
+      moduleIndexLabel={String(lessonPosition).padStart(2, "0")}
+      courseProgressPercent={courseProgressPercent}
+      blocks={blocks}
+      userId={user!.id}
+      isComplete={isComplete}
+      initiallyBookmarked={!!bookmark}
+      reflectionStarted={reflectionStarted}
+      markCompleteButton={<MarkCompleteButton lessonId={lesson.id} userId={user!.id} initiallyComplete={isComplete} />}
+      reflectionForm={<LessonReflectionForm lessonId={lesson.id} userId={user!.id} />}
+    />
+  );
+}

@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-soft text-charcoal font-body;
+    background-image: radial-gradient(circle at top right, rgba(242, 223, 216, 0.35), transparent 55%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display text-burgundy;
+  }
+  :focus-visible {
+    outline: 3px solid #E6A742;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .save-status-dot {
+    @apply inline-flex items-center gap-1.5 text-xs font-ui;
+  }
+
+  /* Cards: rounded, soft-shadowed, generous padding by default via p-* on the element.
+     Hover elevation only applies where .card-hover is added (clickable cards). */
+  .card {
+    @apply bg-white rounded-card-lg border border-charcoal/[0.06] shadow-card transition-shadow duration-200;
+  }
+  .card-hover {
+    @apply hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 cursor-pointer;
+  }
+  .card-band-burgundy { @apply border-t-4 border-t-burgundy; }
+  .card-band-sunrise { @apply border-t-4 border-t-sunrise; }
+  .card-band-coral { @apply border-t-4 border-t-coral; }
+  .card-band-gold { @apply border-t-4 border-t-gold; }
+
+  /* Buttons: pill-shaped, 44px min touch height, lift on hover, clear focus/disabled */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-burgundy px-6 py-3 text-sm font-ui font-semibold text-soft shadow-button transition-all duration-150 hover:bg-burgundy-dark hover:-translate-y-0.5 hover:shadow-card-hover active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none disabled:hover:translate-y-0 min-h-[44px];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-pale-pink/60 px-6 py-3 text-sm font-ui font-semibold text-burgundy transition-all duration-150 hover:bg-pale-pink hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none min-h-[44px];
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill border-2 border-burgundy px-6 py-2.5 text-sm font-ui font-semibold text-burgundy transition-all duration-150 hover:bg-burgundy hover:text-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none min-h-[44px];
+  }
+  /* Creative Studio primary action — sunrise, per brand usage rules */
+  .btn-sunrise {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-sunrise px-6 py-3 text-sm font-ui font-semibold text-soft shadow-button transition-all duration-150 hover:bg-sunrise-dark hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none min-h-[44px];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-5 py-2.5 text-sm font-ui font-semibold text-charcoal/70 transition hover:bg-charcoal/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold min-h-[44px];
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 text-xs font-ui font-semibold;
+  }
+
+  /* Form controls: rounded, visible labels handled in markup; this is the input itself */
+  .field-label {
+    @apply mb-1.5 block font-ui text-sm font-semibold text-charcoal;
+  }
+  .field-hint {
+    @apply mt-1 font-ui text-xs text-charcoal/55;
+  }
+  .field-error {
+    @apply mt-1.5 flex items-center gap-1 font-ui text-xs font-medium text-coral-dark;
+  }
+  .input,
+  input[type="text"].input,
+  textarea.input,
+  select.input {
+    @apply w-full rounded-control border-2 border-charcoal/10 bg-white px-4 py-3 font-ui text-sm text-charcoal placeholder:text-charcoal/35 transition-colors duration-150 focus:border-burgundy focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold min-h-[44px];
+  }
+  .input-error {
+    @apply border-coral focus:border-coral;
+  }
+  .input-success {
+    @apply border-green-600 focus:border-green-600;
+  }
+  .checkbox-row {
+    @apply flex items-start gap-3 font-ui text-sm text-charcoal;
+  }
+  input[type="checkbox"] {
+    @apply h-5 w-5 rounded-md border-2 border-charcoal/25 text-burgundy accent-burgundy focus:ring-2 focus:ring-gold focus:ring-offset-1;
+  }
+  input[type="radio"] {
+    @apply h-5 w-5 border-2 border-charcoal/25 text-burgundy accent-burgundy focus:ring-2 focus:ring-gold focus:ring-offset-1;
+  }
+
+  .upload-card {
+    @apply flex flex-col items-center justify-center gap-2 rounded-card-lg border-2 border-dashed border-charcoal/15 bg-pale-pink/20 px-6 py-8 text-center transition hover:border-burgundy/40 hover:bg-pale-pink/30;
+  }
+
+  /* Segmented control / area switcher */
+  .segmented {
+    @apply inline-flex items-center gap-1 rounded-pill bg-charcoal/5 p-1;
+  }
+  .segmented-item {
+    @apply rounded-pill px-4 py-2 font-ui text-sm font-semibold text-charcoal/60 transition min-h-[36px] flex items-center;
+  }
+  .segmented-item-active {
+    @apply bg-white text-burgundy shadow-soft;
+  }
+}
