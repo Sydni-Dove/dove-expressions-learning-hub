@@ -28,7 +28,10 @@ export default function CourseEditFields({
   initialEstimatedDuration,
   initialTrackKey,
   initialSeriesKey,
-  initialCoverImageUrl
+  initialCoverImageUrl,
+  initialAccessMode,
+  initialLessonStyle,
+  settingsAvailable = false
 }: {
   courseId: string;
   initialTitle: string;
@@ -44,6 +47,10 @@ export default function CourseEditFields({
   initialTrackKey?: string;
   initialSeriesKey?: string;
   initialCoverImageUrl?: string | null;
+  initialAccessMode?: string;
+  initialLessonStyle?: string;
+  /** false until migration 0027 is applied; hides the controls so saves can't fail on a missing column. */
+  settingsAvailable?: boolean;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -63,6 +70,8 @@ export default function CourseEditFields({
   const [estimatedDuration, setEstimatedDuration] = useState(initialEstimatedDuration || "");
   const [trackKey, setTrackKey] = useState(inferredTrackKey);
   const [seriesKey, setSeriesKey] = useState(initialSeriesKey || (inferredTrackKey === "rooted" ? "mind_of_christ" : ""));
+  const [accessMode, setAccessMode] = useState(initialAccessMode || "open");
+  const [lessonStyle, setLessonStyle] = useState(initialLessonStyle || "reflective");
   const [coverImageUrl, setCoverImageUrl] = useState(initialCoverImageUrl || "");
   const [status, setStatus] = useState<"saving" | "saved" | "failed" | "offline">("saved");
 
@@ -230,6 +239,40 @@ export default function CourseEditFields({
             <option value="series">Teaching series</option>
           </select>
         </div>
+        {settingsAvailable && (
+          <>
+            <div>
+              <label className="mb-1 block font-ui text-sm font-semibold text-charcoal">Who can open lessons</label>
+              <select
+                value={accessMode}
+                onChange={(e) => {
+                  setAccessMode(e.target.value);
+                  save({ access_mode: e.target.value });
+                }}
+                className="w-full input"
+                data-testid="access-mode"
+              >
+                <option value="open">Open — any signed-in student</option>
+                <option value="enrolled">Enrolled students only</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block font-ui text-sm font-semibold text-charcoal">Lesson style</label>
+              <select
+                value={lessonStyle}
+                onChange={(e) => {
+                  setLessonStyle(e.target.value);
+                  save({ lesson_style: e.target.value });
+                }}
+                className="w-full input"
+                data-testid="lesson-style"
+              >
+                <option value="reflective">Reflective (reflection &amp; prayer)</option>
+                <option value="practical">Practical (build along, My Build)</option>
+              </select>
+            </div>
+          </>
+        )}
         <div>
           <label className="mb-1 block font-ui text-sm font-semibold text-charcoal">Maturity level</label>
           <select

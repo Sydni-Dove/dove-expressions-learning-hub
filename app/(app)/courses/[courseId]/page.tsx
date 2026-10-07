@@ -1,15 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserAndRoles } from "@/lib/roles";
+import { getCurrentUserAndRoles, hasAnyRole } from "@/lib/roles";
+import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
+import CourseLocked from "@/components/CourseLocked";
 
 export default async function CourseDetailPage({ params }: { params: { courseId: string } }) {
   const supabase = createClient();
-  const { user } = await getCurrentUserAndRoles();
+  const { user, roles } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
 
   const { data: course } = await supabase.from("dp_courses").select("id,title,description,pillar").eq("id", params.courseId).maybeSingle();
   if (!course) notFound();
+
+  const settings = await getCourseSettings(supabase, params.courseId);
+  const isStaff = hasAnyRole(roles, ["super_admin", "faculty", "teacher"]);
+  if (!(await canAccessCourse(supabase, params.courseId, settings, isStaff))) {
+    return <CourseLocked courseId={params.courseId} />;
+  }
 
   const { data: modules } = await supabase
     .from("dp_modules")
@@ -33,6 +41,11 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
         </Link>
         <h1 className="mt-2 font-display text-3xl text-burgundy">{course.title}</h1>
         {course.description && <p className="mt-2 font-body text-charcoal/70">{course.description}</p>}
+        {settings.lessonStyle === "practical" && (
+          <Link href={`/courses/${course.id}/my-build`} className="btn-sunrise mt-4" data-testid="my-build-link">
+            Open My Build
+          </Link>
+        )}
       </div>
 
       <div className="space-y-6">
