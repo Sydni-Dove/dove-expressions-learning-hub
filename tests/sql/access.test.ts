@@ -170,4 +170,15 @@ describe("rollback script", () => {
     const t = await db2.query<any>("select to_regclass('dp_builds') r");
     expect(t.rows[0].r).toBeNull();
   }, 240000);
+
+  it("0025/0026 rollback removes the seeded course, storage policies and helper", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { db: db3 } = await createDb();
+    await db3.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0027_0028_practical_courses.sql"), "utf8"));
+    await db3.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0025_0026.sql"), "utf8"));
+    expect((await db3.query<any>("select count(*)::int n from dp_courses where slug='dreams-and-visions'")).rows[0].n).toBe(0);
+    expect((await db3.query<any>("select count(*)::int n from pg_policies where schemaname='storage' and policyname like 'course_media%'")).rows[0].n).toBe(0);
+    expect((await db3.query<any>("select to_regproc('dp_safe_uuid(text)') r")).rows[0].r).toBeNull();
+  }, 240000);
 });
