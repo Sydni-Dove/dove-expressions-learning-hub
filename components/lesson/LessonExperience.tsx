@@ -13,6 +13,9 @@ import LessonCompletion from "@/components/lesson/LessonCompletion";
 import ScriptureDrawer from "@/components/lesson/ScriptureDrawer";
 import LessonNotesDrawer from "@/components/lesson/LessonNotesDrawer";
 import VideoPlayer from "@/components/lesson/VideoPlayer";
+import DoThisNow from "@/components/lesson/DoThisNow";
+import PromptCard from "@/components/lesson/PromptCard";
+import LessonNav from "@/components/lesson/LessonNav";
 import { MEDIA_UNAVAILABLE } from "@/lib/storage";
 import type { LessonBlock, LessonMediaContent, ScriptureRef, TeachingSectionContent, TakeawaysContent } from "@/lib/types";
 
@@ -34,7 +37,10 @@ export default function LessonExperience({
   initiallyBookmarked,
   reflectionStarted,
   markCompleteButton,
-  reflectionForm
+  reflectionForm,
+  lessonStyle = "reflective",
+  nav,
+  myBuildHref
 }: {
   lessonId: string;
   lessonTitle: string;
@@ -54,7 +60,12 @@ export default function LessonExperience({
   reflectionStarted: boolean;
   markCompleteButton: React.ReactNode;
   reflectionForm: React.ReactNode;
+  /** "practical" courses skip the spiritual Reflection form/wording. Defaults to the existing behavior. */
+  lessonStyle?: "reflective" | "practical";
+  nav?: { previousId: string | null; nextId: string | null; isLast: boolean };
+  myBuildHref?: string;
 }) {
+  const practical = lessonStyle === "practical";
   const [notesOpen, setNotesOpen] = useState(false);
   const [scriptureOpen, setScriptureOpen] = useState(false);
   const [activeScripture, setActiveScripture] = useState<ScriptureRef | null>(null);
@@ -68,8 +79,8 @@ export default function LessonExperience({
       const c = b.content as unknown as TeachingSectionContent;
       return { anchor: c.anchor, label: c.heading };
     });
-    return [...items, { anchor: "completion", label: "Continue to Reflection" }];
-  }, [teachingSections]);
+    return [...items, { anchor: "completion", label: practical ? "Finish this lesson" : "Continue to Reflection" }];
+  }, [teachingSections, practical]);
 
   const allScriptureRefs: ScriptureRef[] = useMemo(() => {
     const seen = new Map<string, ScriptureRef>();
@@ -117,6 +128,7 @@ export default function LessonExperience({
         lessonTitle={lessonTitle}
         progressPercent={courseProgressPercent}
         onOpenNotes={() => setNotesOpen(true)}
+        myBuildHref={myBuildHref}
       />
 
       <main className="mx-auto w-full max-w-[1440px] px-4 py-6 pb-16 sm:px-6 lg:px-10 lg:py-8">
@@ -278,6 +290,10 @@ export default function LessonExperience({
                         )}
                       </section>
                     );
+                  case "do_this_now":
+                    return <DoThisNow key={block.id} title={c.title} instruction={c.instruction} items={c.items} />;
+                  case "prompt_card":
+                    return c.prompt ? <PromptCard key={block.id} label={c.label} prompt={c.prompt} /> : null;
                   case "resources": {
                     const items: { label: string; url?: string; downloadable?: boolean }[] = c.items ?? [];
                     return (
@@ -312,11 +328,15 @@ export default function LessonExperience({
                 <p className="py-8 font-body text-charcoal/60">This lesson&rsquo;s content is still being built.</p>
               )}
 
-              <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} />
+              <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} practical={practical} myBuildHref={myBuildHref} />
 
-              <section id="reflection" className="scroll-mt-24 pt-2">
-                {reflectionForm}
-              </section>
+              {nav && <LessonNav courseId={courseId} previousId={nav.previousId} nextId={nav.nextId} isLast={nav.isLast} />}
+
+              {!practical && (
+                <section id="reflection" className="scroll-mt-24 pt-2">
+                  {reflectionForm}
+                </section>
+              )}
             </div>
 
             <LessonToolbox

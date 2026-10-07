@@ -27,6 +27,8 @@ const TYPE_LABEL: Record<string, string> = {
   quiz_placeholder: "Quiz",
   prayer_activation: "Prayer / activation",
   resources: "Resources",
+  do_this_now: "Do This Now (practical action)",
+  prompt_card: "Copyable prompt",
   video: "Video (link only)"
 };
 
@@ -44,6 +46,8 @@ const TYPE_ORDER = [
   "quiz_placeholder",
   "prayer_activation",
   "resources",
+  "do_this_now",
+  "prompt_card",
   "scripture",
   "video"
 ];
@@ -104,6 +108,10 @@ function defaultContent(type: string): Record<string, any> {
       return { heading: "Prayer & Activation", body: "" };
     case "resources":
       return { items: [] };
+    case "do_this_now":
+      return { title: "Do this now", instruction: "", items: [] };
+    case "prompt_card":
+      return { label: "", prompt: "" };
     default:
       return {};
   }
@@ -147,6 +155,10 @@ function BlockSummary({ block }: { block: Block }) {
       return <p className="font-body text-sm text-charcoal/80">{c.heading || "Prayer"} — {c.body ? "written" : muted("no prayer yet")}</p>;
     case "resources":
       return <p className="font-body text-sm text-charcoal/80">{(c.items?.length ?? 0) ? `${c.items.length} resource(s)` : muted("No resources yet")}</p>;
+    case "do_this_now":
+      return <p className="font-body text-sm text-charcoal/80">{c.title || "Do this now"} — {c.instruction ? c.instruction : muted("no instruction yet")}</p>;
+    case "prompt_card":
+      return <p className="font-body text-sm text-charcoal/80">{c.label ? `${c.label} — ` : ""}{c.prompt ? String(c.prompt).slice(0, 120) : muted("No prompt yet")}</p>;
     default:
       return <p className="font-body text-sm text-charcoal/50">{JSON.stringify(c)}</p>;
   }
@@ -277,6 +289,29 @@ function BlockForm({
     );
   }
 
+  if (type === "do_this_now") {
+    return (
+      <>
+        <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Label (default: Do this now)" className="w-full input" />
+        <textarea value={value.instruction || ""} onChange={(e) => set({ instruction: e.target.value })} placeholder="What should the student do right now?" rows={3} className="w-full input" />
+        <div>
+          <label className="field-label">Checklist items — one per line (optional)</label>
+          <textarea defaultValue={(value.items || []).join("\n")} onChange={(e) => set({ items: linesToItems(e.target.value) })} rows={4} className="w-full input" />
+        </div>
+      </>
+    );
+  }
+
+  if (type === "prompt_card") {
+    return (
+      <>
+        <input value={value.label || ""} onChange={(e) => set({ label: e.target.value })} placeholder="Label (optional, e.g. Strategist prompt)" className="w-full input" />
+        <textarea value={value.prompt || ""} onChange={(e) => set({ prompt: e.target.value })} placeholder="Paste the prompt exactly as students should copy it" rows={8} className="w-full input font-mono text-sm" />
+        <p className="font-ui text-xs text-charcoal/50">Line breaks and spacing are kept exactly as typed.</p>
+      </>
+    );
+  }
+
   if (type === "resources") {
     return (
       <div className="space-y-2">
@@ -385,6 +420,8 @@ function validate(type: string, content: Record<string, any>): string | null {
   if (type === "written" && !(content.body || "").trim() && !(content.heading || "").trim()) return "Add a heading or body.";
   if (type === "scripture" && (!(content.text || "").trim() || !(content.reference || "").trim())) return "Add both the Scripture text and its reference.";
   if (type === "reflection_question" && !(content.prompt || "").trim()) return "Add the reflection prompt.";
+  if (type === "do_this_now" && !(content.instruction || "").trim() && (content.items || []).length === 0) return "Add an instruction or at least one checklist item.";
+  if (type === "prompt_card" && !(content.prompt || "").trim()) return "Add the prompt text.";
   if (type === "video" && !(content.url || "").trim()) return "Add the video link.";
   if (type === "teaching_section" && (!(content.heading || "").trim() || (content.paragraphs || []).length === 0)) return "Add a heading and at least one paragraph.";
   return null;

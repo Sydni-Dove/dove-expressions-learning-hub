@@ -9,13 +9,15 @@ export default function LessonHeader({
   courseId,
   lessonTitle,
   progressPercent,
-  onOpenNotes
+  onOpenNotes,
+  myBuildHref
 }: {
   courseTitle: string;
   courseId: string;
   lessonTitle: string;
   progressPercent: number;
   onOpenNotes: () => void;
+  myBuildHref?: string;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -48,9 +50,15 @@ export default function LessonHeader({
               />
             </div>
           </div>
-          <Link href="/discipleship/journey" className="btn-ghost hidden !min-h-[40px] !px-3 !text-xs sm:inline-flex">
-            My Journey
-          </Link>
+          {myBuildHref ? (
+            <Link href={myBuildHref} className="btn-ghost hidden !min-h-[40px] !px-3 !text-xs sm:inline-flex">
+              My Build
+            </Link>
+          ) : (
+            <Link href="/discipleship/journey" className="btn-ghost hidden !min-h-[40px] !px-3 !text-xs sm:inline-flex">
+              My Journey
+            </Link>
+          )}
           <button
             type="button"
             aria-label={mobileOpen ? "Close mobile navigation" : "Open mobile navigation"}
@@ -68,6 +76,11 @@ export default function LessonHeader({
           <Link href={`/courses/${courseId}`} className="btn-secondary" onClick={() => setMobileOpen(false)}>
             {courseTitle} / {lessonTitle}
           </Link>
+          {myBuildHref && (
+            <Link href={myBuildHref} className="btn-secondary" onClick={() => setMobileOpen(false)}>
+              My Build
+            </Link>
+          )}
           <Link href="/discipleship/journey" className="btn-secondary" onClick={() => setMobileOpen(false)}>
             My Journey
           </Link>
