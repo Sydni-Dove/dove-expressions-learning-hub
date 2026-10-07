@@ -1,4 +1,4 @@
--- v6b: "Making Things for God: AI-Assisted App & Website Building" — DRAFT SHELL ONLY.
+-- v6b: "How to Build an App with AI" — DRAFT SHELL ONLY.
 --
 -- Purely additive data seed. Requires 0027 (access_mode / lesson_style columns).
 -- Creates ONE unpublished course in the Creative Studio learning area
@@ -22,8 +22,8 @@ declare
   ];
   i int;
 begin
-  if exists (select 1 from dp_courses where slug = 'making-things-for-god') then
-    raise notice 'Making Things for God already seeded — skipping.';
+  if exists (select 1 from dp_courses where slug = 'how-to-build-an-app-with-ai') then
+    raise notice 'How to Build an App with AI already seeded — skipping.';
     return;
   end if;
 
@@ -37,10 +37,10 @@ begin
     is_published, is_standalone, content_status, access_mode, lesson_style
   ) values (
     v_area, null,
-    'Making Things for God: AI-Assisted App & Website Building',
-    'Build a real app or website while you learn',
-    'making-things-for-god',
-    'A practical, project-based course: you will build one real app or website with AI, step by step.',
+    'How to Build an App with AI',
+    'Build your first app or website with AI—without knowing how to code.',
+    'how-to-build-an-app-with-ai',
+    'Build your first app or website with AI—without knowing how to code.',
     (select coalesce(max(order_index), 0) + 1 from dp_courses where area_id = v_area),
     false, true, 'draft', 'enrolled', 'practical'
   ) returning id into v_course;

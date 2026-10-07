@@ -31,7 +31,7 @@ alter table public.profiles enable row level security;
 grant usage on schema public, auth, storage to anon, authenticated;
 `;
 
-export async function createDb(opts: { upTo?: string } = {}) {
+export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip: ["0025"] }) {
   const db = new PGlite();
   await db.exec(BOOTSTRAP);
   const dir = path.join(__dirname, "../../supabase/migrations");
@@ -39,6 +39,7 @@ export async function createDb(opts: { upTo?: string } = {}) {
   const applied: string[] = [];
   for (const f of files) {
     if (opts.upTo && f.slice(0, 4) > opts.upTo) break;
+    if (opts.skip?.includes(f.slice(0, 4))) continue; // mirrors live: 0025 is intentionally not applied
     await db.exec(fs.readFileSync(path.join(dir, f), "utf8"));
     applied.push(f);
   }
