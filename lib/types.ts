@@ -37,6 +37,9 @@ export interface Pathway {
   journey_order_index: number;
   accent_color: string | null;
   icon_key: string | null;
+  parent_pathway_code?: PathwayCode | null;
+  is_primary?: boolean;
+  pathway_level?: "primary" | "track" | string | null;
   status: ContentStatus;
   created_at: string;
 }
@@ -52,6 +55,8 @@ export interface Course {
   cover_image_url: string | null;
   pillar: string | null;
   pathways: PathwayCode[];
+  track_key?: string | null;
+  series_key?: string | null;
   content_format: "course" | "series";
   difficulty_level: "foundational" | "growing" | "deepening" | null;
   estimated_duration: string | null;

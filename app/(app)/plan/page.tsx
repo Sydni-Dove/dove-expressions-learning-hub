@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { EmptyState, Pill } from "@/components/ui";
 import ActionStepToggle from "@/components/ActionStepToggle";
+import { pathwayDisplayLabel } from "@/lib/pathways";
 
 export default async function PlanPage() {
   const supabase = createClient();
@@ -36,13 +37,6 @@ export default async function PlanPage() {
     .select("id,title,pillar,pathways,reason,desired_growth,status,review_date")
     .eq("plan_id", plan.id);
 
-  const PATHWAY_LABEL: Record<string, string> = {
-    draw_near: "Draw Near",
-    hear_god: "Hear God",
-    rooted: "Rooted",
-    kingdom_mandate: "Kingdom Mandate"
-  };
-
   const goalIds = (goals ?? []).map((g) => g.id);
   const { data: steps } = goalIds.length
     ? await supabase.from("dp_action_steps").select("id,goal_id,title,description,due_date,status").in("goal_id", goalIds)
@@ -64,7 +58,7 @@ export default async function PlanPage() {
             <div className="flex flex-wrap items-center gap-2">
               {goal.pathways && goal.pathways.length > 0 ? (
                 goal.pathways.map((code: string) => (
-                  <Pill key={code} tone="burgundy">{PATHWAY_LABEL[code] || code}</Pill>
+                  <Pill key={code} tone="burgundy">{pathwayDisplayLabel(code)}</Pill>
                 ))
               ) : (
                 goal.pillar && <Pill tone="burgundy">{goal.pillar.replace(/_/g, " ")}</Pill>

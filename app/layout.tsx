@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Dove Expressions | Discipleship Hub & Creative Studio",
   description:
-    "Draw Near, Rooted, Hear God, Kingdom Mandate — a discipleship learning platform organized around four pathways, helping believers pursue their Kingdom mandate."
+    "Draw Near, Hear God, Kingdom Mandate — a discipleship learning platform organized around three pathways, with Rooted as a formation track within Draw Near."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

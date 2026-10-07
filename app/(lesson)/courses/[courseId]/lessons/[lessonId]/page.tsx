@@ -4,6 +4,7 @@ import { getCurrentUserAndRoles } from "@/lib/roles";
 import LessonExperience from "@/components/lesson/LessonExperience";
 import LessonReflectionForm from "@/components/LessonReflectionForm";
 import MarkCompleteButton from "@/components/MarkCompleteButton";
+import { resolveStorageContent } from "@/lib/storage";
 import type { LessonBlock } from "@/lib/types";
 
 export default async function LessonPage({ params }: { params: { courseId: string; lessonId: string } }) {
@@ -36,7 +37,13 @@ export default async function LessonPage({ params }: { params: { courseId: strin
     supabase.from("dp_lesson_bookmarks").select("id").eq("user_id", user!.id).eq("lesson_id", lesson.id).maybeSingle(),
     supabase.from("dp_lesson_reflections").select("*").eq("lesson_id", lesson.id).eq("student_id", user!.id).maybeSingle()
   ]);
-  const blocks = (blocksRaw ?? []) as LessonBlock[];
+  // Resolve any protected-media references (storage://…) into short-lived signed
+  // URLs, server-side, before content reaches the browser. Signing runs through
+  // the caller's session, so it inherits the private bucket's lesson-access RLS;
+  // anything the caller can't access resolves to an empty (honest) state.
+  const blocks = (await Promise.all(
+    (blocksRaw ?? []).map(async (b: any) => ({ ...b, content: await resolveStorageContent(supabase, b.content) }))
+  )) as LessonBlock[];
 
   // Position this lesson within the whole course (across all modules) for "Lesson X of Y"
   // and the header's course-wide progress bar — real numbers, not hard-coded to Episode 2.

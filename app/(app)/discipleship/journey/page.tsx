@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { ProgressBar, Pill, IconBadge, EmptyState } from "@/components/ui";
 import { getPathwayProgress, statusForStats } from "@/lib/pathway-progress";
-import { PATHWAY_ICONS, PATHWAY_STYLES, formationStage } from "@/lib/pathways";
+import { PATHWAY_ICONS, PATHWAY_STYLES, ROOTED_TRACK, formationStage } from "@/lib/pathways";
 import type { PathwayCode } from "@/lib/types";
 import { BookOpen, NotebookPen, Target, CheckCircle2, ArrowRight } from "lucide-react";
 
@@ -46,6 +46,7 @@ export default async function DiscipleshipJourneyPage() {
   const activeCourses = visibleCourses.filter((c) => c.totalLessons > 0 && c.completedLessons < c.totalLessons && c.completedLessons > 0);
   const savedLessons = visibleCourses.filter((c) => c.completedLessons === 0 && c.totalLessons > 0);
   const completedCourses = visibleCourses.filter((c) => c.totalLessons > 0 && c.completedLessons === c.totalLessons);
+  const rootedCourse = courses.find((c: any) => c.track_key === "rooted" || c.pathways?.includes("rooted"));
 
   const journeyOrdered = [...pathways].sort((a, b) => a.journey_order_index - b.journey_order_index);
   const currentPathway =
@@ -60,14 +61,14 @@ export default async function DiscipleshipJourneyPage() {
       <div>
         <h1 className="font-display text-3xl text-burgundy">My Discipleship Journey</h1>
         <p className="mt-1 font-body text-charcoal/70">
-          One place to see where you are, what you're carrying, and what's next — across all four pathways.
+          One place to see where you are, what you're carrying, and what's next across all three pathways.
         </p>
       </div>
 
-      {/* Progress across all four pathways */}
+      {/* Progress across all three pathways */}
       <div>
-        <h2 className="font-display text-lg text-burgundy">Progress Across the Four Pathways</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <h2 className="font-display text-lg text-burgundy">Progress Across the Three Pathways</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
           {journeyOrdered.map((p) => {
             const s = stats[p.code];
             const percent = s && s.totalLessons ? Math.round((s.completedLessons / s.totalLessons) * 100) : 0;
@@ -95,6 +96,14 @@ export default async function DiscipleshipJourneyPage() {
         <div className={`card ${PATHWAY_STYLES[currentPathway.code as PathwayCode].band} p-6`}>
           <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">Current pathway</p>
           <h2 className="mt-1 font-display text-xl text-burgundy">{currentPathway.name}</h2>
+          {currentPathway.code === "draw_near" && rootedCourse && (
+            <div className="mt-3 rounded-card bg-pale-pink/35 p-4">
+              <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">Current track</p>
+              <p className="font-display text-lg text-burgundy">{ROOTED_TRACK.name}</p>
+              <p className="mt-2 font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">Current series</p>
+              <p className="font-body text-sm text-charcoal/75">{rootedCourse.title || ROOTED_TRACK.seriesTitle}</p>
+            </div>
+          )}
           <p className="mt-2 font-body text-sm text-charcoal/70">Recommended next step: continue where you left off.</p>
           <Link href={`/discipleship/${currentPathway.code}`} className="btn-primary mt-4">
             Go to {currentPathway.name} <ArrowRight className="h-4 w-4" aria-hidden="true" />

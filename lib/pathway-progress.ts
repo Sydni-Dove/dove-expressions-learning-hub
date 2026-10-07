@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PathwayCode } from "@/lib/types";
+import { getPrimaryPathwayCode, isPrimaryPathwayCode } from "@/lib/pathways";
 
 export type PathwayStats = {
   publishedCourseCount: number;
@@ -24,7 +25,7 @@ export async function getPathwayProgress(supabase: SupabaseClient<any>, userId: 
     supabase.from("dp_pathways").select("*").order("order_index"),
     supabase
       .from("dp_courses")
-      .select("id,title,subtitle,slug,description,pathways,is_published,content_status,content_format,order_index"),
+      .select("id,title,subtitle,slug,description,pathways,track_key,series_key,is_published,content_status,content_format,order_index"),
     supabase.from("dp_modules").select("id,course_id"),
     supabase.from("dp_lessons").select("id,module_id,title,status").eq("status", "published"),
     supabase.from("dp_lesson_progress").select("lesson_id,status").eq("user_id", userId)
@@ -42,11 +43,15 @@ export async function getPathwayProgress(supabase: SupabaseClient<any>, userId: 
   const completedIds = new Set((progressRows ?? []).filter((p: any) => p.status === "completed").map((p: any) => p.lesson_id));
   const inProgressIds = new Set((progressRows ?? []).filter((p: any) => p.status === "in_progress").map((p: any) => p.lesson_id));
 
+  const primaryPathways = (pathways ?? []).filter((p: any) => isPrimaryPathwayCode(p.code));
   const stats: Record<string, PathwayStats> = {};
-  for (const p of pathways ?? []) stats[p.code] = { publishedCourseCount: 0, comingSoonCount: 0, totalLessons: 0, completedLessons: 0 };
+  for (const p of primaryPathways) {
+    stats[p.code] = { publishedCourseCount: 0, comingSoonCount: 0, totalLessons: 0, completedLessons: 0 };
+  }
 
   for (const c of courses ?? []) {
-    for (const code of (c.pathways ?? []) as PathwayCode[]) {
+    const primaryCodes = new Set(((c.pathways ?? []) as PathwayCode[]).map((code) => getPrimaryPathwayCode(code)));
+    for (const code of primaryCodes) {
       if (!stats[code]) continue;
       // Archived content is excluded from both "available" and "coming soon" counts —
       // it's no longer active, not upcoming. Confirmed via QA review round 2.
@@ -69,5 +74,5 @@ export async function getPathwayProgress(supabase: SupabaseClient<any>, userId: 
     return { ...c, totalLessons: courseLessons.length, completedLessons: completed, percent };
   });
 
-  return { pathways: pathways ?? [], courses: courseProgress, lessonsByCourse, completedIds, inProgressIds, stats };
+  return { pathways: primaryPathways, courses: courseProgress, lessonsByCourse, completedIds, inProgressIds, stats };
 }

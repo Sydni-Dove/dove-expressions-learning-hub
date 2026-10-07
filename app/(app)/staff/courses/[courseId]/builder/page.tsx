@@ -10,7 +10,7 @@ export default async function CourseBuilderPage({ params }: { params: { courseId
 
   const { data: course } = await supabase
     .from("dp_courses")
-    .select("id,title,subtitle,description,is_published,is_standalone,program_id,pathways,content_status,content_format,difficulty_level,estimated_duration")
+    .select("id,title,subtitle,description,is_published,is_standalone,program_id,pathways,track_key,series_key,content_status,content_format,difficulty_level,estimated_duration,cover_image_url")
     .eq("id", courseId)
     .maybeSingle();
 
@@ -59,6 +59,9 @@ export default async function CourseBuilderPage({ params }: { params: { courseId
         initialContentFormat={course.content_format || "course"}
         initialDifficultyLevel={course.difficulty_level || ""}
         initialEstimatedDuration={course.estimated_duration || ""}
+        initialTrackKey={course.track_key || ""}
+        initialSeriesKey={course.series_key || ""}
+        initialCoverImageUrl={course.cover_image_url || ""}
       />
 
       <div>

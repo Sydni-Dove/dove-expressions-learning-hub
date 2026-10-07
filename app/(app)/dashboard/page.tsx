@@ -75,7 +75,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Four Pathways snapshot — brief on purpose; full detail lives on /discipleship */}
+      {/* Three Pathways snapshot — brief on purpose; full detail lives on /discipleship */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">Your Pathways</p>
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
             View Discipleship home →
           </Link>
         </div>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           {pathways.map((p) => {
             const s = stats[p.code];
             const percent = s && s.totalLessons ? Math.round((s.completedLessons / s.totalLessons) * 100) : 0;

@@ -74,7 +74,7 @@ export const mockResources = [
   { id: "r4", title: "Spiritual Wiring Categories Reference Card", category: "Reference", access: "free", pathways: ["kingdom_mandate"] },
   { id: "r5", title: "Meetings With God Journal", category: "Journal", access: "purchased", pathways: ["draw_near"] },
   { id: "r6", title: "Dream Journal & Interpretation Companion", category: "Journal", access: "purchased", pathways: ["hear_god"] },
-  { id: "r7", title: "Mind of Christ Reflection Workbook", category: "Workbook", access: "enrolled", pathways: ["rooted"] },
+  { id: "r7", title: "Mind of Christ Reflection Workbook", category: "Workbook", access: "enrolled", pathways: ["draw_near", "rooted"] },
   { id: "r8", title: "Spiritual Wiring Assessment & Planning Tools", category: "Assessment", access: "enrolled", pathways: ["kingdom_mandate"] }
 ];
 
