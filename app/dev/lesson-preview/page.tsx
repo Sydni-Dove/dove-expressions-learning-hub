@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import LessonExperience from "@/components/lesson/LessonExperience";
+import sampleBlocks from "@/lib/app-objective-sample.json";
 import type { LessonBlock } from "@/lib/types";
 
 /**
@@ -21,23 +22,23 @@ const blocks = (style: string): LessonBlock[] => [
   ...(style === "reflective" ? [{ id: "b5", lesson_id: "l", block_type: "reflection_question", order_index: 4, content: { prompt: "What is God highlighting?" } }] : [])
 ];
 
-export default function Page({ searchParams }: { searchParams: { style?: string; pos?: string } }) {
+export default function Page({ searchParams }: { searchParams: { style?: string; pos?: string; sample?: string } }) {
   if (process.env.NEXT_PUBLIC_ENABLE_DEV_HARNESS !== "1") notFound();
   const style = searchParams.style === "reflective" ? "reflective" : "practical";
   const pos = searchParams.pos === "first" ? "first" : searchParams.pos === "last" ? "last" : "middle";
   return (
     <LessonExperience
       lessonId="l"
-      lessonTitle="Fixture lesson"
+      lessonTitle={searchParams.sample ? "Lesson 1.1 — Start With the Objective, Not the Technology" : "Fixture lesson"}
       eyebrow="Fixture course · Lesson 2 of 5"
       courseId="c"
-      courseTitle="Fixture course"
+      courseTitle={searchParams.sample ? "How to Make an App with AI" : "Fixture course"}
       instructorName="Sydni"
       durationLabel="10 min"
       statusLabel="Not started"
       moduleIndexLabel="02"
       courseProgressPercent={20}
-      blocks={blocks(style)}
+      blocks={searchParams.sample ? sampleBlocks.map((b, i) => ({ ...b, id: `sample-${i}`, lesson_id: "l", order_index: i })) as LessonBlock[] : blocks(style)}
       userId="u"
       isComplete={false}
       initiallyBookmarked={false}

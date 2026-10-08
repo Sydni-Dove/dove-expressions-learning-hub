@@ -26,9 +26,9 @@ const SECTIONS: { title: string; blurb?: string; fields: { key: keyof BuildField
   },
   {
     title: "My AI building team",
-    blurb: "These are roles, not three different tools — one AI can fill all three.",
+    blurb: "One AI can fill all three roles. You remain the decision-maker.",
     fields: [
-      { key: "strategist_tool", label: "Strategist (plans & decides)", placeholder: "e.g. Claude" },
+      { key: "strategist_tool", label: "Strategist (helps plan)", placeholder: "e.g. Claude" },
       { key: "developer_tool", label: "Developer (builds)", placeholder: "e.g. Claude Code" },
       { key: "evaluator_tool", label: "Evaluator (checks & reviews)", placeholder: "e.g. Claude" }
     ]

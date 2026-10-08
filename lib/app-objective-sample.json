@@ -1,0 +1,56 @@
+[
+  {
+    "block_type": "teaching_section",
+    "content": {
+      "anchor": "objective",
+      "heading": "Start With the Objective, Not the Technology",
+      "paragraphs": [
+        "Let\u2019s start with a distinction that will help you through the whole build. An idea tells us what you are interested in making. An objective tells us what that thing needs to accomplish for someone. \u201cA dream app\u201d is an idea. \u201cA place where someone can record a dream and find it again later\u201d gives us an experience we can actually build and test. Your objective gives AI direction, and it gives you a way to recognize whether the work is moving toward your goal.",
+        "If you are brand new to this, your first question is probably not, \u201cWhat framework should I use?\u201d Your question is, \u201cWhere do I even begin?\u201d Begin with the thing you actually know: the idea.",
+        "Start by telling your strategist what you want to make. You may only know, 'I want to make an app that does this,' or, 'I want a website where people can do this.' That is enough to begin. Before the build starts, get clear on the objective: what are you making, who is it for, and what is the main thing it should do?",
+        "Do not worry about making the first description sound technical. In fact, I would rather you describe the experience you want than try to use technical language you do not understand. Tell the strategist what you want the person using the app or website to be able to do.",
+        "I like to get the objective down to about a sentence or a short paragraph. It does not have to describe every feature or page. It needs to tell me what I am making and what the main thing is that it should accomplish.",
+        "That short objective becomes an anchor. Later, when AI starts suggesting features or when you get excited about new possibilities, you can come back to it and ask, \u201cIs this helping me accomplish the thing I said I was building?\u201d",
+        "For example, when I think about a color studio, the central idea is not 'I want a React application with image-processing functions.' The idea is closer to: 'I want to upload my journal design and be able to recolor it.' That gives the strategist something to plan around and gives me something to judge the build against later.",
+        "Your first objective can also include an experience requirement. For me, it is often: it needs to look nice and do the main thing I built it to do. That may sound simple, but it is a powerful filter. If the app is beautiful and the main function does not work, it is not ready. If the function technically exists but the experience is nothing like what I had in mind, I still need to direct the build closer to the vision."
+      ]
+    }
+  },
+  {
+    "block_type": "takeaways",
+    "content": {
+      "items": [
+        {
+          "heading": "Your objective is the anchor",
+          "body": "Describe who the app serves and what its main experience should accomplish. Use that objective to judge what AI builds."
+        }
+      ]
+    }
+  },
+  {
+    "block_type": "do_this_now",
+    "content": {
+      "title": "Do This Now",
+      "instruction": "Before you move on, describe one person using your idea. What do they arrive needing to do? What do they do inside the app or website? What should they have when they finish? Write that experience in ordinary language. If your answer turns into a long feature list, come back to the main action. You will use this objective in the workshop checkpoint and the strategist prompt at the end of this phase.",
+      "items": [
+        "Write your objective in My Build.",
+        "Name who it is for and the main action.",
+        "Save My Build before leaving the page."
+      ]
+    }
+  },
+  {
+    "block_type": "prompt_card",
+    "content": {
+      "label": "Strategist Prompt",
+      "prompt": "I want to build [idea]. The main objective is [objective]. Help me turn this into a buildable app plan. Ask only the questions that materially affect how the app should work. Help me define the central user experience, what the first working version needs to accomplish, and what can reasonably wait."
+    }
+  },
+  {
+    "block_type": "workbook_download",
+    "content": {
+      "label": "App Objective Worksheet",
+      "url": "/courses/3be784b0-5adb-4d10-9ab7-603b914311ee/worksheets/app-objective"
+    }
+  }
+]

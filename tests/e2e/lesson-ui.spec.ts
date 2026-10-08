@@ -53,3 +53,14 @@ test.describe("practical lesson UI (fixture)", () => {
     await page.screenshot({ path: `output/playwright/lesson-practical-${test.info().project.name}.png`, fullPage: true });
   });
 });
+
+test('source lesson sample is readable and has its action prompt and worksheet', async ({ page }) => {
+  await page.goto('/dev/lesson-preview?sample=1');
+  await expect(page.getByRole('heading', { name: 'Start With the Objective, Not the Technology', exact: true })).toBeVisible();
+  await expect(page.getByTestId('do-this-now')).toContainText('Save My Build');
+  await expect(page.getByTestId('prompt-text')).toContainText('Ask only the questions that materially affect');
+  await expect(page.getByRole('link', { name: 'Download workbook' })).toHaveAttribute('href', /worksheets\/app-objective$/);
+  await expect(page.getByText('Continue to Reflection')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: `output/playwright/app-objective-${test.info().project.name}.png`, fullPage: true });
+});

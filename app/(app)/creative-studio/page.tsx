@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCurrentUserAndRoles } from "@/lib/roles";
@@ -23,8 +24,9 @@ export default async function CreativeStudioPage() {
   const { data: area } = await supabase.from("dp_learning_areas").select("id,name,tagline,description").eq("area_key", "creative_studio").maybeSingle();
   const { data: courses } = await supabase
     .from("dp_courses")
-    .select("id,title,pillar,order_index")
+    .select("id,title,description,pillar,order_index,is_standalone,program_id")
     .eq("area_id", area?.id)
+    .eq("is_published", true)
     .order("order_index");
 
   const { data: projects } = await supabase
@@ -32,6 +34,11 @@ export default async function CreativeStudioPage() {
     .select("id,product_name,current_phase,progress_percent,recommended_from_discipleship")
     .eq("student_id", user!.id)
     .order("updated_at", { ascending: false });
+
+  const { data: roadmap } = await supabase.from("dp_programs").select("id")
+    .eq("slug", "stationery-product-creation-roadmap").maybeSingle();
+  const roadmapCourses = (courses ?? []).filter((c) => roadmap && c.program_id === roadmap.id);
+  const standaloneCourses = (courses ?? []).filter((c) => !roadmap || c.program_id !== roadmap.id);
 
   return (
     <div className="space-y-10 pb-16">
@@ -50,16 +57,31 @@ export default async function CreativeStudioPage() {
         <h2 className="font-display text-xl text-burgundy">Stationery Product Creation Roadmap</h2>
         <p className="mt-1 font-body text-sm text-charcoal/70">Take the full 8-course roadmap, or a single course on its own.</p>
         <ol className="mt-4 grid gap-3 sm:grid-cols-2">
-          {(courses ?? []).map((c) => (
+          {roadmapCourses.map((c) => (
             <li key={c.id} className="card flex items-center gap-3 p-4">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sunrise/20 font-ui text-sm font-bold text-[#7a4a00]">
                 {c.order_index}
               </span>
-              <span className="font-body text-charcoal">{c.title}</span>
+              <Link href={`/courses/${c.id}`} className="font-body text-charcoal underline hover:text-burgundy">{c.title}</Link>
             </li>
           ))}
         </ol>
       </div>
+
+      <section aria-labelledby="standalone-courses-heading">
+        <h2 id="standalone-courses-heading" className="font-display text-xl text-burgundy">Standalone courses and workshops</h2>
+        <p className="mt-1 font-body text-sm text-charcoal/70">Choose a course for the project you want to create.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {standaloneCourses.map((course) => (
+            <Link key={course.id} href={`/courses/${course.id}`} className="card block p-5 hover:border-sunrise/40">
+              <h3 className="font-display text-lg text-burgundy">{course.title}</h3>
+              {course.description && <p className="mt-2 font-body text-sm text-charcoal/70">{course.description}</p>}
+              <span className="mt-3 block font-ui text-sm font-semibold text-sunrise-dark">View course →</span>
+            </Link>
+          ))}
+          {standaloneCourses.length === 0 && <p className="font-body text-sm text-charcoal/60">Courses and workshops will appear here when they are ready.</p>}
+        </div>
+      </section>
 
       <div>
         <div className="mb-4 flex items-center justify-between">
