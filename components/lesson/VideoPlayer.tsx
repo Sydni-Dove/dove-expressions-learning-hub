@@ -1,6 +1,7 @@
 "use client";
 
 import { getEmbedUrl, isDirectMediaFile } from "@/lib/video";
+import { MEDIA_UNAVAILABLE } from "@/lib/storage";
 
 /** Real video playback: an actual <video> element for a direct file URL, a real
     YouTube/Vimeo iframe embed for a provider link, or an honest "not added yet"
@@ -16,6 +17,15 @@ export default function VideoPlayer({
   posterEyebrow?: string;
   title: string;
 }) {
+  if (url === MEDIA_UNAVAILABLE) {
+    return (
+      <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 bg-charcoal/5 px-6 py-10 text-center">
+        <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">Video</p>
+        <p className="font-body text-sm text-charcoal/60">This video is unavailable or you don&rsquo;t have access to it.</p>
+      </div>
+    );
+  }
+
   if (!url) {
     return (
       <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 bg-charcoal/5 px-6 py-10 text-center">

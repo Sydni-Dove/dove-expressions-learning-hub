@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Pill } from "@/components/ui";
+import { pathwayDisplayLabel } from "@/lib/pathways";
 
 export default async function CoursesPage() {
   const supabase = createClient();
@@ -9,13 +10,6 @@ export default async function CoursesPage() {
     .select("id,title,description,pillar,pathways,is_published,area_id,dp_learning_areas(name,area_key)")
     .eq("is_published", true)
     .order("order_index");
-
-  const PATHWAY_LABEL: Record<string, string> = {
-    draw_near: "Draw Near",
-    hear_god: "Hear God",
-    rooted: "Rooted",
-    kingdom_mandate: "Kingdom Mandate"
-  };
 
   const discipleshipCourses = (courses ?? []).filter((c: any) => c.dp_learning_areas?.area_key === "discipleship_hub");
 
@@ -43,7 +37,7 @@ export default async function CoursesPage() {
               {c.pathways && c.pathways.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {c.pathways.map((code: string) => (
-                    <Pill key={code} tone="burgundy">{PATHWAY_LABEL[code] || code}</Pill>
+                    <Pill key={code} tone="burgundy">{pathwayDisplayLabel(code)}</Pill>
                   ))}
                 </div>
               ) : (

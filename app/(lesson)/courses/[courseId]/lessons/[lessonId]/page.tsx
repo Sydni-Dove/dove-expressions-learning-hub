@@ -1,15 +1,26 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserAndRoles } from "@/lib/roles";
+import { getCurrentUserAndRoles, hasAnyRole } from "@/lib/roles";
+import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
+import { orderPublishedLessons, computeLessonNeighbors } from "@/lib/lesson-nav";
+import CourseLocked from "@/components/CourseLocked";
 import LessonExperience from "@/components/lesson/LessonExperience";
 import LessonReflectionForm from "@/components/LessonReflectionForm";
 import MarkCompleteButton from "@/components/MarkCompleteButton";
+import { resolveStorageContent } from "@/lib/storage";
 import type { LessonBlock } from "@/lib/types";
 
 export default async function LessonPage({ params }: { params: { courseId: string; lessonId: string } }) {
   const supabase = createClient();
-  const { user } = await getCurrentUserAndRoles();
+  const { user, roles } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
+
+  // Route-level enrollment gate (defense in depth; RLS in migration 0027 is the real boundary).
+  const settings = await getCourseSettings(supabase, params.courseId);
+  const isStaff = hasAnyRole(roles, ["super_admin", "faculty", "teacher"]);
+  if (!(await canAccessCourse(supabase, params.courseId, settings, isStaff))) {
+    return <CourseLocked courseId={params.courseId} />;
+  }
 
   const { data: lesson } = await supabase
     .from("dp_lessons")
@@ -36,7 +47,13 @@ export default async function LessonPage({ params }: { params: { courseId: strin
     supabase.from("dp_lesson_bookmarks").select("id").eq("user_id", user!.id).eq("lesson_id", lesson.id).maybeSingle(),
     supabase.from("dp_lesson_reflections").select("*").eq("lesson_id", lesson.id).eq("student_id", user!.id).maybeSingle()
   ]);
-  const blocks = (blocksRaw ?? []) as LessonBlock[];
+  // Resolve any protected-media references (storage://…) into short-lived signed
+  // URLs, server-side, before content reaches the browser. Signing runs through
+  // the caller's session, so it inherits the private bucket's lesson-access RLS;
+  // anything the caller can't access resolves to an empty (honest) state.
+  const blocks = (await Promise.all(
+    (blocksRaw ?? []).map(async (b: any) => ({ ...b, content: await resolveStorageContent(supabase, b.content) }))
+  )) as LessonBlock[];
 
   // Position this lesson within the whole course (across all modules) for "Lesson X of Y"
   // and the header's course-wide progress bar — real numbers, not hard-coded to Episode 2.
@@ -45,13 +62,10 @@ export default async function LessonPage({ params }: { params: { courseId: strin
   const { data: allLessons } = moduleIds.length
     ? await supabase.from("dp_lessons").select("id,module_id,order_index,status").in("module_id", moduleIds).eq("status", "published")
     : { data: [] };
-  const moduleOrder = new Map((allModules ?? []).map((m) => [m.id, m.order_index]));
-  const flattened = [...(allLessons ?? [])].sort((a, b) => {
-    const mo = (moduleOrder.get(a.module_id) ?? 0) - (moduleOrder.get(b.module_id) ?? 0);
-    return mo !== 0 ? mo : a.order_index - b.order_index;
-  });
-  const lessonPosition = Math.max(1, flattened.findIndex((l) => l.id === lesson.id) + 1);
-  const totalLessons = flattened.length || 1;
+  const flattened = orderPublishedLessons(allModules ?? [], allLessons ?? []);
+  const neighbors = computeLessonNeighbors(flattened, lesson.id);
+  const lessonPosition = neighbors.position;
+  const totalLessons = neighbors.total;
 
   const { data: progressRows } = await supabase
     .from("dp_lesson_progress")
@@ -86,6 +100,9 @@ export default async function LessonPage({ params }: { params: { courseId: strin
       reflectionStarted={reflectionStarted}
       markCompleteButton={<MarkCompleteButton lessonId={lesson.id} userId={user!.id} initiallyComplete={isComplete} />}
       reflectionForm={<LessonReflectionForm lessonId={lesson.id} userId={user!.id} />}
+      lessonStyle={settings.lessonStyle}
+      nav={{ previousId: neighbors.previousId, nextId: neighbors.nextId, isLast: neighbors.isLast }}
+      myBuildHref={settings.lessonStyle === "practical" ? `/courses/${course.id}/my-build` : undefined}
     />
   );
 }

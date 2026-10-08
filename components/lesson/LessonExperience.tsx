@@ -13,6 +13,10 @@ import LessonCompletion from "@/components/lesson/LessonCompletion";
 import ScriptureDrawer from "@/components/lesson/ScriptureDrawer";
 import LessonNotesDrawer from "@/components/lesson/LessonNotesDrawer";
 import VideoPlayer from "@/components/lesson/VideoPlayer";
+import DoThisNow from "@/components/lesson/DoThisNow";
+import PromptCard from "@/components/lesson/PromptCard";
+import LessonNav from "@/components/lesson/LessonNav";
+import { MEDIA_UNAVAILABLE } from "@/lib/storage";
 import type { LessonBlock, LessonMediaContent, ScriptureRef, TeachingSectionContent, TakeawaysContent } from "@/lib/types";
 
 export default function LessonExperience({
@@ -33,7 +37,10 @@ export default function LessonExperience({
   initiallyBookmarked,
   reflectionStarted,
   markCompleteButton,
-  reflectionForm
+  reflectionForm,
+  lessonStyle = "reflective",
+  nav,
+  myBuildHref
 }: {
   lessonId: string;
   lessonTitle: string;
@@ -53,7 +60,12 @@ export default function LessonExperience({
   reflectionStarted: boolean;
   markCompleteButton: React.ReactNode;
   reflectionForm: React.ReactNode;
+  /** "practical" courses skip the spiritual Reflection form/wording. Defaults to the existing behavior. */
+  lessonStyle?: "reflective" | "practical";
+  nav?: { previousId: string | null; nextId: string | null; isLast: boolean };
+  myBuildHref?: string;
 }) {
+  const practical = lessonStyle === "practical";
   const [notesOpen, setNotesOpen] = useState(false);
   const [scriptureOpen, setScriptureOpen] = useState(false);
   const [activeScripture, setActiveScripture] = useState<ScriptureRef | null>(null);
@@ -67,8 +79,8 @@ export default function LessonExperience({
       const c = b.content as unknown as TeachingSectionContent;
       return { anchor: c.anchor, label: c.heading };
     });
-    return [...items, { anchor: "completion", label: "Continue to Reflection" }];
-  }, [teachingSections]);
+    return [...items, { anchor: "completion", label: practical ? "Finish this lesson" : "Continue to Reflection" }];
+  }, [teachingSections, practical]);
 
   const allScriptureRefs: ScriptureRef[] = useMemo(() => {
     const seen = new Map<string, ScriptureRef>();
@@ -116,6 +128,7 @@ export default function LessonExperience({
         lessonTitle={lessonTitle}
         progressPercent={courseProgressPercent}
         onOpenNotes={() => setNotesOpen(true)}
+        myBuildHref={myBuildHref}
       />
 
       <main className="mx-auto w-full max-w-[1440px] px-4 py-6 pb-16 sm:px-6 lg:px-10 lg:py-8">
@@ -175,7 +188,11 @@ export default function LessonExperience({
                     return (
                       <div key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
                         {c.heading && <h3 className="mb-2 font-display text-lg text-burgundy">{c.heading}</h3>}
-                        <p className="font-body leading-relaxed text-charcoal/85">{c.body}</p>
+                        {c.body ? (
+                          <p className="whitespace-pre-line font-body leading-relaxed text-charcoal/85">{c.body}</p>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Teaching content coming soon.</p>
+                        )}
                       </div>
                     );
                   case "scripture":
@@ -196,6 +213,112 @@ export default function LessonExperience({
                         Embed placeholder — connects to {c.provider || "the provider"} when a link is added.
                       </div>
                     );
+                  case "learning_objectives": {
+                    const items: string[] = c.items ?? [];
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">Learning Objectives</h3>
+                        {items.length ? (
+                          <ul className="list-disc space-y-1 pl-5 font-body text-charcoal/85">
+                            {items.map((it, idx) => <li key={idx}>{it}</li>)}
+                          </ul>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Learning objectives coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  }
+                  case "key_scriptures": {
+                    const refs: { reference: string; text?: string }[] = c.refs ?? [];
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">Key Scriptures</h3>
+                        {refs.length ? (
+                          <ul className="space-y-2 font-body text-charcoal/85">
+                            {refs.map((r, idx) => (
+                              <li key={idx}>
+                                <span className="font-semibold text-burgundy">{r.reference}</span>
+                                {r.text ? <span className="italic text-charcoal/70"> — &ldquo;{r.text}&rdquo;</span> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Key scriptures coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  }
+                  case "workbook_download":
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">{c.label || "Workbook"}</h3>
+                        {c.url === MEDIA_UNAVAILABLE ? (
+                          <p className="font-ui text-sm text-charcoal/60">This workbook is unavailable or you don&rsquo;t have access to it.</p>
+                        ) : c.url ? (
+                          <a href={c.url} target="_blank" rel="noreferrer" className="btn-secondary inline-flex">Download workbook ↓</a>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Workbook coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  case "assignment_placeholder":
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">{c.title || "Assignment"}</h3>
+                        {c.instructions ? (
+                          <p className="whitespace-pre-line font-body text-charcoal/85">{c.instructions}</p>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Assignment details coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  case "quiz_placeholder":
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">{c.title || "Quiz"}</h3>
+                        <p className="font-ui text-sm text-charcoal/40">{c.note ? c.note : "Quiz coming soon."}</p>
+                      </section>
+                    );
+                  case "prayer_activation":
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">{c.heading || "Prayer & Activation"}</h3>
+                        {c.body ? (
+                          <blockquote className="rounded-card border-l-4 border-gold bg-pale-pink/30 px-4 py-3 font-body italic text-charcoal/90">{c.body}</blockquote>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Prayer &amp; activation coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  case "do_this_now":
+                    return <DoThisNow key={block.id} title={c.title} instruction={c.instruction} items={c.items} />;
+                  case "prompt_card":
+                    return c.prompt ? <PromptCard key={block.id} label={c.label} prompt={c.prompt} /> : null;
+                  case "resources": {
+                    const items: { label: string; url?: string; downloadable?: boolean }[] = c.items ?? [];
+                    return (
+                      <section key={block.id} className="border-b border-charcoal/10 py-6 first:pt-0">
+                        <h3 className="mb-2 font-display text-lg text-burgundy">Resources</h3>
+                        {items.length ? (
+                          <ul className="space-y-1 font-body text-charcoal/85">
+                            {items.map((r, idx) => (
+                              <li key={idx}>
+                                {r.url === MEDIA_UNAVAILABLE ? (
+                                  <span className="text-charcoal/60">{r.label} <span className="font-ui text-xs">(unavailable or access-restricted)</span></span>
+                                ) : r.url ? (
+                                  <a href={r.url} target="_blank" rel="noreferrer" className="text-burgundy underline">{r.label}</a>
+                                ) : (
+                                  r.label
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="font-ui text-sm text-charcoal/40">Resources coming soon.</p>
+                        )}
+                      </section>
+                    );
+                  }
                   default:
                     return null;
                 }
@@ -205,11 +328,15 @@ export default function LessonExperience({
                 <p className="py-8 font-body text-charcoal/60">This lesson&rsquo;s content is still being built.</p>
               )}
 
-              <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} />
+              <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} practical={practical} myBuildHref={myBuildHref} />
 
-              <section id="reflection" className="scroll-mt-24 pt-2">
-                {reflectionForm}
-              </section>
+              {nav && <LessonNav courseId={courseId} previousId={nav.previousId} nextId={nav.nextId} isLast={nav.isLast} />}
+
+              {!practical && (
+                <section id="reflection" className="scroll-mt-24 pt-2">
+                  {reflectionForm}
+                </section>
+              )}
             </div>
 
             <LessonToolbox

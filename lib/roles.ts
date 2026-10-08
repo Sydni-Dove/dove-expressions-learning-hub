@@ -24,3 +24,17 @@ export async function getCurrentUserAndRoles() {
 export function hasAnyRole(roles: DpRole[], check: DpRole[]) {
   return roles.some((r) => check.includes(r));
 }
+
+/**
+ * Route guard for staff-only sections. Redirects anyone without one of the given
+ * roles (signed-out users to /login, everyone else to /dashboard). This hides the
+ * staff UI shell from students; it is defense in depth — the real boundary is
+ * still Postgres RLS on every dp_ table.
+ */
+export async function requireRoles(allowed: DpRole[]) {
+  const { redirect } = await import("next/navigation");
+  const { user, roles } = await getCurrentUserAndRoles();
+  if (!user) redirect("/login");
+  if (!hasAnyRole(roles, allowed)) redirect("/dashboard");
+  return { user: user!, roles };
+}

@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { PrototypePreviewBadge, Pill } from "@/components/ui";
 import { mockResources } from "@/lib/mock-data";
+import { pathwayDisplayLabel } from "@/lib/pathways";
 
 const FILTERS = ["All", "Assigned", "Included with enrollment", "Purchased", "Free", "Downloads", "Audio", "Video", "Worksheets", "Products"];
 
 const PATHWAY_FILTERS: { code: string; label: string }[] = [
   { code: "draw_near", label: "Draw Near" },
   { code: "hear_god", label: "Hear God" },
-  { code: "rooted", label: "Rooted" },
   { code: "kingdom_mandate", label: "Kingdom Mandate" }
 ];
 
@@ -25,7 +25,8 @@ export default function LibraryPage() {
   const [pathwayFilter, setPathwayFilter] = useState<string | null>(null);
 
   const filtered = mockResources.filter((r) => {
-    if (pathwayFilter && !r.pathways.includes(pathwayFilter)) return false;
+    if (pathwayFilter === "draw_near" && !r.pathways.some((code) => code === "draw_near" || code === "rooted")) return false;
+    if (pathwayFilter && pathwayFilter !== "draw_near" && !r.pathways.includes(pathwayFilter)) return false;
     if (filter === "All") return true;
     if (filter === "Free") return r.access === "free";
     if (filter === "Included with enrollment") return r.access === "enrolled";
@@ -86,8 +87,7 @@ export default function LibraryPage() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <Pill tone={r.access === "free" ? "success" : "neutral"}>{ACCESS_LABEL[r.access]}</Pill>
                 {r.pathways.map((code) => {
-                  const p = PATHWAY_FILTERS.find((pf) => pf.code === code);
-                  return p ? <Pill key={code} tone="gold">{p.label}</Pill> : null;
+                  return <Pill key={code} tone="gold">{pathwayDisplayLabel(code)}</Pill>;
                 })}
               </div>
               <h3 className="mt-2 font-display text-lg text-burgundy">{r.title}</h3>

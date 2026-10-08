@@ -3,7 +3,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { ProgressBar, ProgressRing, Pill, IconBadge, EmptyState } from "@/components/ui";
-import { PATHWAY_ICONS, PATHWAY_STYLES, formationStage, pathwayHref } from "@/lib/pathways";
+import {
+  getPrimaryPathwayCode,
+  isPrimaryPathwayCode,
+  PATHWAY_ICONS,
+  PATHWAY_STYLES,
+  ROOTED_TRACK,
+  formationStage,
+  pathwayHref
+} from "@/lib/pathways";
 import type { PathwayCode } from "@/lib/types";
 import { ArrowRight, NotebookPen, Radio, Compass } from "lucide-react";
 
@@ -40,12 +48,14 @@ export default async function DiscipleshipHomePage() {
   }
   const completedLessonIds = new Set((progressRows ?? []).map((p) => p.lesson_id));
 
+  const primaryPathways = (pathways ?? []).filter((p) => isPrimaryPathwayCode(p.code));
   const stats: Record<string, PathwayStats> = {};
-  for (const p of pathways ?? []) {
+  for (const p of primaryPathways) {
     stats[p.code] = { publishedCourseCount: 0, comingSoonCount: 0, totalLessons: 0, completedLessons: 0 };
   }
   for (const c of courses ?? []) {
-    for (const code of c.pathways ?? []) {
+    const primaryCodes = new Set<PathwayCode>((c.pathways ?? []).map((code: string) => getPrimaryPathwayCode(code)));
+    for (const code of primaryCodes) {
       if (!stats[code]) continue;
       // Archived content is excluded from both "available" and "coming soon" counts.
       if (c.content_status === "archived") continue;
@@ -71,7 +81,7 @@ export default async function DiscipleshipHomePage() {
   const overallPercent = totalLessonsAll ? Math.round((completedLessonsAll / totalLessonsAll) * 100) : 0;
 
   // Recommended next step: first pathway (in journey order) that isn't complete and has published content.
-  const journeyOrdered = [...(pathways ?? [])].sort((a, b) => a.journey_order_index - b.journey_order_index);
+  const journeyOrdered = [...primaryPathways].sort((a, b) => a.journey_order_index - b.journey_order_index);
   const recommended = journeyOrdered.find((p) => {
     const s = stats[p.code];
     return s && s.publishedCourseCount > 0 && statusFor(s) !== "Completed";
@@ -114,14 +124,14 @@ export default async function DiscipleshipHomePage() {
         </div>
       )}
 
-      {/* Four Pathway cards */}
+      {/* Three Pathway cards */}
       <div>
-        <h2 className="font-display text-xl text-burgundy">The Four Pathways</h2>
+        <h2 className="font-display text-xl text-burgundy">The Three Pathways</h2>
         <p className="mt-1 font-body text-sm text-charcoal/60">
-          The journey isn't rigid, but it generally moves Draw Near → Rooted → Hear God → Kingdom Mandate.
+          The journey isn't rigid, but it generally moves Draw Near → Hear God → Kingdom Mandate.
         </p>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          {(pathways ?? []).map((p) => {
+        <div className="mt-4 grid gap-5 sm:grid-cols-3">
+          {primaryPathways.map((p) => {
             const s = stats[p.code] ?? { publishedCourseCount: 0, comingSoonCount: 0, totalLessons: 0, completedLessons: 0 };
             const percent = s.totalLessons ? Math.round((s.completedLessons / s.totalLessons) * 100) : 0;
             const status = statusFor(s);
@@ -154,6 +164,26 @@ export default async function DiscipleshipHomePage() {
               </div>
             );
           })}
+        </div>
+        <div id="rooted" className="mt-5 card card-band-gold p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Pill tone="gold">Formation track within Draw Near</Pill>
+              <h3 className="mt-3 font-display text-2xl text-burgundy">{ROOTED_TRACK.title}</h3>
+              <p className="mt-2 max-w-2xl font-body text-sm text-charcoal/75">{ROOTED_TRACK.description}</p>
+            </div>
+            <Link href="/discipleship/draw_near#rooted" className="btn-secondary shrink-0">
+              View Rooted
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="mt-5 rounded-card bg-pale-pink/35 p-5">
+            <Pill tone="neutral">Coming soon</Pill>
+            <h4 className="mt-2 font-display text-xl text-burgundy">{ROOTED_TRACK.seriesTitle}</h4>
+            <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">
+              {ROOTED_TRACK.seriesSubtitle}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -203,7 +233,7 @@ export default async function DiscipleshipHomePage() {
         </div>
       </div>
 
-      {(!pathways || pathways.length === 0) && (
+      {(!primaryPathways || primaryPathways.length === 0) && (
         <EmptyState icon={Compass} title="Pathways not configured" body="Your discipleship pathways will appear here once set up." />
       )}
     </div>

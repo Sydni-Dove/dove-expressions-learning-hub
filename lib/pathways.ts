@@ -1,12 +1,40 @@
 import { Sparkles, Ear, Wind, Compass, type LucideIcon } from "lucide-react";
 import type { PathwayCode } from "@/lib/types";
 
-/** The Four Pathways — the platform's primary discipleship organizing model.
-    Official listing order stays Draw Near, Hear God, Rooted, Kingdom Mandate
-    everywhere (nav, cards, staff builder). The general-progression narrative
-    shown alongside it (e.g. on the Discipleship home page) uses
-    journey_order_index instead: Draw Near -> Rooted -> Hear God -> Kingdom Mandate. */
-export const PATHWAY_ORDER: PathwayCode[] = ["draw_near", "hear_god", "rooted", "kingdom_mandate"];
+/** Three top-level pathways. Rooted is retained as a nested formation track
+    within Draw Near so older course/resource/progress tags remain readable. */
+export const PRIMARY_PATHWAY_ORDER: PathwayCode[] = ["draw_near", "hear_god", "kingdom_mandate"];
+export const INTERNAL_PATHWAY_ORDER: PathwayCode[] = ["draw_near", "hear_god", "rooted", "kingdom_mandate"];
+export const PATHWAY_ORDER = PRIMARY_PATHWAY_ORDER;
+
+export const ROOTED_TRACK = {
+  code: "rooted",
+  parentCode: "draw_near",
+  name: "Rooted",
+  title: "Rooted: Spiritual Formation, Healing, and Maturity",
+  description:
+    "Become established in Christ in your identity, thinking, character, emotional life, and spiritual practices.",
+  seriesTitle: "The Mind of Christ",
+  seriesSubtitle: "Learning to Think, Discern, and Respond From Christ's Perspective"
+} as const;
+
+export function isPrimaryPathwayCode(code: string): code is PathwayCode {
+  return PRIMARY_PATHWAY_ORDER.includes(code as PathwayCode);
+}
+
+export function getPrimaryPathwayCode(code: string): PathwayCode {
+  return code === ROOTED_TRACK.code ? ROOTED_TRACK.parentCode : (code as PathwayCode);
+}
+
+export function pathwayDisplayLabel(code: string): string {
+  if (code === ROOTED_TRACK.code) return "Draw Near · Rooted";
+  const labels: Record<string, string> = {
+    draw_near: "Draw Near",
+    hear_god: "Hear God",
+    kingdom_mandate: "Kingdom Mandate"
+  };
+  return labels[code] ?? code.replace(/_/g, " ");
+}
 
 export const PATHWAY_ICONS: Record<PathwayCode, LucideIcon> = {
   draw_near: Sparkles,
@@ -35,5 +63,5 @@ export function formationStage(percent: number): string {
 }
 
 export function pathwayHref(code: PathwayCode): string {
-  return `/discipleship/${code}`;
+  return `/discipleship/${getPrimaryPathwayCode(code)}`;
 }

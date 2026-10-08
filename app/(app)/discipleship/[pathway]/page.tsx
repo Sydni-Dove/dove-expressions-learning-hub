@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { ProgressBar, Pill, IconBadge, EmptyState } from "@/components/ui";
-import { PATHWAY_ICONS, PATHWAY_STYLES, formationStage } from "@/lib/pathways";
+import { PATHWAY_ICONS, PATHWAY_STYLES, ROOTED_TRACK, formationStage, isPrimaryPathwayCode } from "@/lib/pathways";
 import { mockResources } from "@/lib/mock-data";
 import type { PathwayCode } from "@/lib/types";
 import { ArrowRight, BookOpen, Clock3 } from "lucide-react";
@@ -13,6 +13,8 @@ const PATHWAY_CODES: PathwayCode[] = ["draw_near", "hear_god", "rooted", "kingdo
 export default async function PathwayDetailPage({ params }: { params: { pathway: string } }) {
   const code = params.pathway as PathwayCode;
   if (!PATHWAY_CODES.includes(code)) notFound();
+  if (code === "rooted") redirect("/discipleship/draw_near#rooted");
+  if (!isPrimaryPathwayCode(code)) notFound();
 
   const supabase = createClient();
   const { user } = await getCurrentUserAndRoles();
@@ -21,15 +23,16 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
   const { data: pathway } = await supabase.from("dp_pathways").select("*").eq("code", code).maybeSingle();
   if (!pathway) notFound();
 
+  const coursePathwayCodes = code === "draw_near" ? ["draw_near", "rooted"] : [code];
   const { data: courses } = await supabase
     .from("dp_courses")
-    .select("id,title,subtitle,slug,description,content_format,content_status,difficulty_level,estimated_duration,is_published,order_index")
-    .contains("pathways", [code])
+    .select("id,title,subtitle,slug,description,pathways,track_key,series_key,content_format,content_status,difficulty_level,estimated_duration,is_published,order_index")
+    .overlaps("pathways", coursePathwayCodes)
     .order("order_index");
 
-  // Archived content is excluded from both lists — it's no longer active, not upcoming.
-  const publishedCourses = (courses ?? []).filter((c) => c.is_published && c.content_status !== "archived");
-  const comingSoonCourses = (courses ?? []).filter((c) => !c.is_published && c.content_status === "coming_soon");
+  const activeCourses = (courses ?? []).filter((c) => c.content_status !== "archived");
+  const publishedCourses = activeCourses.filter((c) => c.is_published);
+  const comingSoonCourses = activeCourses.filter((c) => !c.is_published && c.content_status === "coming_soon");
 
   const courseIds = publishedCourses.map((c) => c.id);
   const { data: modules } = courseIds.length
@@ -59,11 +62,13 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
   const completedLessons = [...lessonsByCourse.values()].flat().filter((id) => completedIds.has(id)).length;
   const percent = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
-  const relatedResources = mockResources.filter((r) => r.pathways.includes(code));
+  const relatedResources = mockResources.filter((r) =>
+    code === "draw_near" ? r.pathways.some((pathwayCode) => pathwayCode === "draw_near" || pathwayCode === "rooted") : r.pathways.includes(code)
+  );
+  const rootedCourses = code === "draw_near" ? activeCourses.filter((c: any) => c.track_key === "rooted" || c.pathways?.includes("rooted")) : [];
 
   const style = PATHWAY_STYLES[code];
   const Icon = PATHWAY_ICONS[code];
-  const isRooted = code === "rooted";
 
   return (
     <div className="space-y-8 pb-16">
@@ -90,7 +95,6 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
         </div>
       </div>
 
-      {/* Purpose & outcomes */}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="card p-6">
           <h2 className="font-display text-lg text-burgundy">Purpose</h2>
@@ -106,25 +110,42 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
         </div>
       </div>
 
-      {/* Rooted gets extra detail per current build priority */}
-      {isRooted && (
-        <div className="card card-band-gold p-6 sm:p-8">
-          <Pill tone="gold">Featured Series</Pill>
-          <h2 className="mt-3 font-display text-2xl text-burgundy">Rooted: The Mind of Christ</h2>
-          <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">
-            Learning to Think, Discern, and Respond From Christ's Perspective
-          </p>
-          <p className="mt-3 max-w-2xl font-body text-charcoal/75">
-            The first teaching series under Rooted. It will include teaching lessons, reflection exercises,
-            Scripture study, declarations, journal prompts, and practical activation — all centered on
-            learning to think, discern, and respond the way Christ does. Lessons are being developed and will
-            be released here as they're ready.
-          </p>
-          <Pill tone="neutral">Coming soon</Pill>
+      {code === "draw_near" && (
+        <div id="rooted" className="card card-band-gold p-6 sm:p-8">
+          <Pill tone="gold">Formation track within Draw Near</Pill>
+          <h2 className="mt-3 font-display text-2xl text-burgundy">{ROOTED_TRACK.title}</h2>
+          <p className="mt-2 max-w-2xl font-body text-charcoal/75">{ROOTED_TRACK.description}</p>
+          <div className="mt-5 rounded-card bg-pale-pink/35 p-5">
+            <Pill tone="neutral">Featured series</Pill>
+            <h3 className="mt-3 font-display text-xl text-burgundy">{ROOTED_TRACK.seriesTitle}</h3>
+            <p className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">
+              {ROOTED_TRACK.seriesSubtitle}
+            </p>
+            <p className="mt-3 max-w-2xl font-body text-charcoal/75">
+              The first teaching series under Rooted. It will include teaching lessons, reflection exercises,
+              Scripture study, declarations, journal prompts, and practical activation, all centered on learning
+              to think, discern, and respond the way Christ does. Lessons are being developed and will be released
+              here as they are ready.
+            </p>
+            <Pill tone="neutral">Coming soon</Pill>
+          </div>
+          {rootedCourses.length > 0 && (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {rootedCourses.map((c: any) => (
+                <div key={c.id} className="card p-5">
+                  <Pill tone={c.content_status === "coming_soon" ? "neutral" : "gold"}>
+                    {c.content_status === "coming_soon" ? "Coming soon" : c.content_format === "series" ? "Series" : "Course"}
+                  </Pill>
+                  <h3 className="mt-2 font-display text-lg text-burgundy">{c.title}</h3>
+                  {c.subtitle && <p className="font-ui text-xs text-charcoal/50">{c.subtitle}</p>}
+                  {c.description && <p className="mt-2 font-body text-sm text-charcoal/70">{c.description}</p>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Available courses / series */}
       <div>
         <h2 className="font-display text-xl text-burgundy">Available Courses &amp; Series</h2>
         <p className="mt-1 font-body text-sm text-charcoal/60">Shown in the recommended order for this pathway.</p>
@@ -140,11 +161,12 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
               const courseLessons = lessonsByCourse.get(c.id) ?? [];
               const courseCompleted = courseLessons.filter((id) => completedIds.has(id)).length;
               const coursePercent = courseLessons.length ? Math.round((courseCompleted / courseLessons.length) * 100) : 0;
+              const isRootedCourse = c.track_key === "rooted" || c.pathways?.includes("rooted");
               return (
                 <Link key={c.id} href={`/courses/${c.id}`} className="card card-hover block p-6">
                   <div className="flex items-center justify-between">
                     <span className="font-ui text-xs font-semibold uppercase tracking-wide text-charcoal/40">
-                      {i + 1}. {c.content_format === "series" ? "Series" : "Course"}
+                      {i + 1}. {isRootedCourse ? "Rooted track" : c.content_format === "series" ? "Series" : "Course"}
                     </span>
                     {c.difficulty_level && <Pill tone="neutral">{c.difficulty_level}</Pill>}
                   </div>
@@ -160,19 +182,21 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
                 </Link>
               );
             })}
-            {comingSoonCourses.map((c) => (
-              <div key={c.id} className="card p-6 opacity-80">
-                <Pill tone="neutral">Coming soon</Pill>
-                <h3 className="mt-2 font-display text-lg text-burgundy">{c.title}</h3>
-                {c.subtitle && <p className="font-ui text-xs text-charcoal/50">{c.subtitle}</p>}
-                {c.description && <p className="mt-2 font-body text-sm text-charcoal/70">{c.description}</p>}
-              </div>
-            ))}
+            {comingSoonCourses.map((c) => {
+              const isRootedCourse = c.track_key === "rooted" || c.pathways?.includes("rooted");
+              return (
+                <div key={c.id} className="card p-6 opacity-80">
+                  <Pill tone="neutral">{isRootedCourse ? "Rooted track · Coming soon" : "Coming soon"}</Pill>
+                  <h3 className="mt-2 font-display text-lg text-burgundy">{c.title}</h3>
+                  {c.subtitle && <p className="font-ui text-xs text-charcoal/50">{c.subtitle}</p>}
+                  {c.description && <p className="mt-2 font-body text-sm text-charcoal/70">{c.description}</p>}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Related resources */}
       {relatedResources.length > 0 && (
         <div>
           <h2 className="font-display text-xl text-burgundy">Related Resources</h2>
@@ -190,7 +214,6 @@ export default async function PathwayDetailPage({ params }: { params: { pathway:
         </div>
       )}
 
-      {/* Reflection & Activation */}
       <div className="card card-band-burgundy p-6 sm:p-8">
         <h2 className="font-display text-lg text-burgundy">Reflection &amp; Activation</h2>
         <p className="mt-1 font-body text-sm text-charcoal/70">
