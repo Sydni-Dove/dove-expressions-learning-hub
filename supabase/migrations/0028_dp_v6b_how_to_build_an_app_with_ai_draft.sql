@@ -1,4 +1,4 @@
--- v6b: "How to Build an App with AI" — DRAFT SHELL ONLY.
+-- v6b: "How to Make an App with AI" — DRAFT SHELL ONLY.
 --
 -- Purely additive data seed. Requires 0027 (access_mode / lesson_style columns).
 -- Creates ONE unpublished course in the Creative Studio learning area
@@ -22,8 +22,8 @@ declare
   ];
   i int;
 begin
-  if exists (select 1 from dp_courses where slug = 'how-to-build-an-app-with-ai') then
-    raise notice 'How to Build an App with AI already seeded — skipping.';
+  if exists (select 1 from dp_courses where slug = 'how-to-make-an-app-with-ai') then
+    raise notice 'How to Make an App with AI already seeded — skipping.';
     return;
   end if;
 
@@ -37,9 +37,9 @@ begin
     is_published, is_standalone, content_status, access_mode, lesson_style
   ) values (
     v_area, null,
-    'How to Build an App with AI',
+    'How to Make an App with AI',
     'Build your first app or website with AI—without knowing how to code.',
-    'how-to-build-an-app-with-ai',
+    'how-to-make-an-app-with-ai',
     'Build your first app or website with AI—without knowing how to code.',
     (select coalesce(max(order_index), 0) + 1 from dp_courses where area_id = v_area),
     false, true, 'draft', 'enrolled', 'practical'

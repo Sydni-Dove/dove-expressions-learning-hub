@@ -44,20 +44,20 @@ beforeAll(async () => {
 
 describe("migrations", () => {
   it("existing courses default to open + reflective", async () => {
-    const r = await db.query<any>("select count(*)::int n from dp_courses where title not in ('How to Build an App with AI') and (access_mode <> 'open' and title not in ('Protected course','Program-scoped protected'))");
+    const r = await db.query<any>("select count(*)::int n from dp_courses where title not in ('How to Make an App with AI') and (access_mode <> 'open' and title not in ('Protected course','Program-scoped protected'))");
     expect(r.rows[0].n).toBe(0);
-    const seeded = await db.query<any>("select access_mode, lesson_style, is_published, program_id from dp_courses where slug='how-to-build-an-app-with-ai'");
+    const seeded = await db.query<any>("select access_mode, lesson_style, is_published, program_id from dp_courses where slug='how-to-make-an-app-with-ai'");
     expect(seeded.rows[0]).toMatchObject({ access_mode: "enrolled", lesson_style: "practical", is_published: false, program_id: null });
   });
   it("applies cleanly WITHOUT 0025 (no Dreams & Visions seed) and uses the approved title/subtitle", async () => {
     expect((await db.query<any>("select count(*)::int n from dp_courses where track_key='dreams_visions'")).rows[0].n).toBe(0);
-    const c = await db.query<any>("select title, subtitle, description, slug from dp_courses where slug='how-to-build-an-app-with-ai'");
-    expect(c.rows[0]).toMatchObject({ title: "How to Build an App with AI", subtitle: "Build your first app or website with AI—without knowing how to code.", description: "Build your first app or website with AI—without knowing how to code." });
+    const c = await db.query<any>("select title, subtitle, description, slug from dp_courses where slug='how-to-make-an-app-with-ai'");
+    expect(c.rows[0]).toMatchObject({ title: "How to Make an App with AI", subtitle: "Build your first app or website with AI—without knowing how to code.", description: "Build your first app or website with AI—without knowing how to code." });
   });
   it("seeds exactly the 7 draft module shells and no lessons", async () => {
-    const m = await db.query<any>("select count(*)::int n from dp_modules m join dp_courses c on c.id=m.course_id where c.slug='how-to-build-an-app-with-ai'");
+    const m = await db.query<any>("select count(*)::int n from dp_modules m join dp_courses c on c.id=m.course_id where c.slug='how-to-make-an-app-with-ai'");
     expect(m.rows[0].n).toBe(7);
-    const l = await db.query<any>("select count(*)::int n from dp_lessons l join dp_modules m on m.id=l.module_id join dp_courses c on c.id=m.course_id where c.slug='how-to-build-an-app-with-ai'");
+    const l = await db.query<any>("select count(*)::int n from dp_lessons l join dp_modules m on m.id=l.module_id join dp_courses c on c.id=m.course_id where c.slug='how-to-make-an-app-with-ai'");
     expect(l.rows[0].n).toBe(0);
   });
 });

@@ -5,7 +5,7 @@
 begin;
 
 -- 0028: draft course (cascades to its modules)
-delete from dp_courses where slug = 'how-to-build-an-app-with-ai';
+delete from dp_courses where slug = 'how-to-make-an-app-with-ai';
 
 -- Restore original policies (captured from live pg_policies before 0027).
 drop policy if exists dp_lessons_read_published on dp_lessons;

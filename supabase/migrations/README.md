@@ -49,7 +49,7 @@ trust.
 
 **v6 — Practical courses (NOT YET APPLIED to the live project; awaiting owner approval):**
 26. `0027_dp_v6_practical_courses.sql` — adds `dp_courses.access_mode` (`open` default | `enrolled`) and `lesson_style` (`reflective` default | `practical`); `dp_can_access_course()`; re-creates `dp_lessons_read_published`, `dp_lesson_blocks_read`, `dp_modules_read` so only `enrolled` courses require enrollment (all existing courses stay `open`); replaces `dp_enrollments_self_insert` with a staff-only insert policy; adds `dp_builds` ("My Build", owner-only RLS, staff read). Rollback: `../rollback/ROLLBACK_0027_0028_practical_courses.sql`.
-27. `0028_dp_v6b_how_to_build_an_app_with_ai_draft.sql` — seeds ONE unpublished course ("How to Build an App with AI") in the Creative Studio area with 7 empty module shells (Start Here + Modules 1–6). No lessons, no content. Requires 0027.
+27. `0028_dp_v6b_how_to_build_an_app_with_ai_draft.sql` — seeds ONE unpublished course ("How to Make an App with AI") in the Creative Studio area with 7 empty module shells (Start Here + Modules 1–6). No lessons, no content. Requires 0027.
 
 Note: file numbering skips `0008` (reserved during the v1/v2 split and never
 used) and jumps from `0007` to `0009`; the live migration history has a
