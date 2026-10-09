@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }) }) }));
 import PromptCard from "@/components/lesson/PromptCard";
 import DoThisNow from "@/components/lesson/DoThisNow";
 import LessonNav from "@/components/lesson/LessonNav";
@@ -51,5 +52,38 @@ describe("LessonNav", () => {
     render(<LessonNav courseId="c" previousId="p" nextId={null} isLast />);
     expect(screen.queryByTestId("next-lesson")).toBeNull();
     expect(screen.getByTestId("finish-course")).toHaveAttribute("href", "/courses/c");
+  });
+});
+
+import LessonIntro from "@/components/lesson/LessonIntro";
+
+describe("LessonIntro stage tracker", () => {
+  const base = { eyebrow: "e", title: "t", courseTitle: "c", statusLabel: "s", moduleIndex: "01", activeStage: "Teaching" as const };
+  it("default (existing discipleship courses): shows the four stages", () => {
+    const { container } = render(<LessonIntro {...base} />);
+    const tracker = container.querySelector('[aria-label="Lesson stages"]');
+    expect(tracker).not.toBeNull();
+    for (const s of ["Teaching", "Reflection", "Practice", "Follow-Up"]) expect(tracker!.textContent).toContain(s);
+  });
+  it("practical courses pass [] and the tracker is gone", () => {
+    const { container } = render(<LessonIntro {...base} stages={[]} />);
+    expect(container.querySelector('[aria-label="Lesson stages"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/Reflection|Follow-Up/);
+  });
+});
+
+import LessonToolbox from "@/components/lesson/LessonToolbox";
+
+describe("LessonToolbox Scripture List", () => {
+  const props = { lessonId: "l", userId: "u", lessonTitle: "T", lessonNotesText: "", transcriptText: "", initiallyBookmarked: false, onOpenNotes: () => {}, onOpenScriptureList: () => {} };
+  it("shows the button when the lesson has scriptures (default)", () => {
+    render(<LessonToolbox {...props} />);
+    expect(screen.getByText("Scripture List")).toBeInTheDocument();
+  });
+  it("hides it when there is nothing to list, keeping the other tools", () => {
+    render(<LessonToolbox {...props} hasScriptures={false} />);
+    expect(screen.queryByText("Scripture List")).toBeNull();
+    expect(screen.getByText("My Lesson Notes")).toBeInTheDocument();
+    expect(screen.getByText("Bookmark Lesson")).toBeInTheDocument();
   });
 });

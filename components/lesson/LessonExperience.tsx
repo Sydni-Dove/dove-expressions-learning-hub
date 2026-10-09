@@ -143,6 +143,7 @@ export default function LessonExperience({
             statusLabel={statusLabel}
             moduleIndex={moduleIndexLabel}
             activeStage={reflectionStarted ? "Reflection" : "Teaching"}
+            stages={practical ? [] : undefined}
           />
 
           {mediaBlock && <LessonMedia content={mediaContent} lessonTitle={lessonTitle} />}
@@ -348,6 +349,7 @@ export default function LessonExperience({
               initiallyBookmarked={initiallyBookmarked}
               onOpenNotes={() => setNotesOpen(true)}
               onOpenScriptureList={openScriptureList}
+              hasScriptures={allScriptureRefs.length > 0}
             />
           </div>
         </div>

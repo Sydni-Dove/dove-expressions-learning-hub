@@ -24,7 +24,8 @@ export default function LessonToolbox({
   transcriptText,
   initiallyBookmarked,
   onOpenNotes,
-  onOpenScriptureList
+  onOpenScriptureList,
+  hasScriptures = true
 }: {
   lessonId: string;
   userId: string;
@@ -34,6 +35,8 @@ export default function LessonToolbox({
   initiallyBookmarked: boolean;
   onOpenNotes: () => void;
   onOpenScriptureList: () => void;
+  /** false hides the Scripture List button (nothing to list). */
+  hasScriptures?: boolean;
 }) {
   const [bookmarked, setBookmarked] = useState(initiallyBookmarked);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
@@ -91,9 +94,11 @@ export default function LessonToolbox({
       >
         Download Transcript
       </button>
-      <button type="button" onClick={onOpenScriptureList} className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
-        Scripture List
-      </button>
+      {hasScriptures && (
+        <button type="button" onClick={onOpenScriptureList} className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
+          Scripture List
+        </button>
+      )}
       <Link href="/library" className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
         Related Resources
       </Link>

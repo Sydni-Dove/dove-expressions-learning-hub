@@ -64,3 +64,11 @@ test('source lesson sample is readable and has its action prompt and worksheet',
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: `output/playwright/app-objective-${test.info().project.name}.png`, fullPage: true });
 });
+
+test('practical lessons hide the four-step tracker and an empty Scripture List; reflective lessons keep the tracker', async ({ page }) => {
+  await page.goto('/dev/lesson-preview?style=practical');
+  await expect(page.locator('[aria-label="Lesson stages"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Scripture List' })).toHaveCount(0);
+  await page.goto('/dev/lesson-preview?style=reflective');
+  await expect(page.locator('[aria-label="Lesson stages"]')).toBeVisible();
+});

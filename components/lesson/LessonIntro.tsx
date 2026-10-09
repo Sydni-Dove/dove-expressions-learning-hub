@@ -1,4 +1,5 @@
 const STAGES = ["Teaching", "Reflection", "Practice", "Follow-Up"] as const;
+type Stage = (typeof STAGES)[number];
 
 export default function LessonIntro({
   eyebrow,
@@ -9,7 +10,8 @@ export default function LessonIntro({
   durationLabel,
   statusLabel,
   moduleIndex,
-  activeStage
+  activeStage,
+  stages = STAGES
 }: {
   eyebrow: string;
   title: string;
@@ -19,7 +21,9 @@ export default function LessonIntro({
   durationLabel?: string | null;
   statusLabel: string;
   moduleIndex: string;
-  activeStage: (typeof STAGES)[number];
+  activeStage: Stage;
+  /** The stage tracker under the module number. Defaults to the four discipleship stages; pass [] to hide it (practical courses). */
+  stages?: readonly Stage[];
 }) {
   return (
     <section aria-labelledby="lesson-title" className="grid gap-4 lg:grid-cols-[1.1fr_280px]">
@@ -54,8 +58,9 @@ export default function LessonIntro({
         <div className="flex h-[110px] items-center justify-center rounded-control bg-burgundy-gradient font-display text-4xl text-soft">
           {moduleIndex}
         </div>
+        {stages.length > 0 && (
         <div className="mt-4 grid gap-2" aria-label="Lesson stages">
-          {STAGES.map((stage) => (
+          {stages.map((stage) => (
             <div
               key={stage}
               className={`grid grid-cols-[40px_1fr] items-center gap-2 font-ui text-[0.66rem] uppercase tracking-wide ${
@@ -67,6 +72,7 @@ export default function LessonIntro({
             </div>
           ))}
         </div>
+        )}
       </aside>
     </section>
   );

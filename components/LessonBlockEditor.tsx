@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Pill } from "@/components/ui";
 import FileUpload from "@/components/FileUpload";
+import { parseRows, serializeRow } from "@/lib/pipe-lines";
 
 interface Block {
   id: string;
@@ -60,15 +61,6 @@ function detectProvider(url: string): string {
 
 function slugify(text: string): string {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "section";
-}
-
-/** Parses "a | b | c" lines into arrays of trimmed parts. Blank lines are skipped. */
-function parsePipeLines(raw: string): string[][] {
-  return raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.split("|").map((part) => part.trim()));
 }
 
 function linesToItems(raw: string): string[] {
@@ -234,8 +226,8 @@ function BlockForm({
       <div>
         <label className="field-label">One per line, as &quot;Reference | Text (optional)&quot;</label>
         <textarea
-          defaultValue={(value.refs || []).map((r: any) => [r.reference, r.text].filter(Boolean).join(" | ")).join("\n")}
-          onChange={(e) => set({ refs: parsePipeLines(e.target.value).map(([reference, text]) => ({ reference: reference || "", text: text || "" })).filter((r) => r.reference) })}
+          defaultValue={(value.refs || []).map((r: any) => serializeRow([r.reference, r.text])).join("\n")}
+          onChange={(e) => set({ refs: parseRows(e.target.value, 2).map(([reference, text]) => ({ reference: reference || "", text: text || "" })).filter((r) => r.reference) })}
           rows={4}
           className="w-full input"
           placeholder={"Job 33:14-16 | For God speaks once, yes twice...\nJoel 2:28"}
@@ -349,8 +341,8 @@ function BlockForm({
         <div>
           <label className="field-label">Transcript rows — one per line, as &quot;MM:SS | text&quot;</label>
           <textarea
-            defaultValue={(value.transcript || []).map((r: any) => `${r.time} | ${r.text}`).join("\n")}
-            onChange={(e) => set({ transcript: parsePipeLines(e.target.value).map(([time, text]) => ({ time: time || "00:00", text: text || "" })).filter((r) => r.text) })}
+            defaultValue={(value.transcript || []).map((r: any) => serializeRow([r.time, r.text])).join("\n")}
+            onChange={(e) => set({ transcript: parseRows(e.target.value, 2).map(([time, text]) => ({ time: time || "00:00", text: text || "" })).filter((r) => r.text) })}
             rows={4}
             className="w-full input"
           />
@@ -371,10 +363,10 @@ function BlockForm({
           <textarea defaultValue={(value.paragraphs || []).join("\n\n")} onChange={(e) => set({ paragraphs: e.target.value.split("\n\n").map((p) => p.trim()).filter(Boolean) })} rows={6} className="w-full input" />
         </div>
         <div>
-          <label className="field-label">Scripture references — one per line, as &quot;Reference | Text | Note (optional)&quot;</label>
+          <label className="field-label">Scripture references — one per line, as &quot;Reference | Text | Note (optional)&quot;. To put a | inside the text, type \|</label>
           <textarea
-            defaultValue={(value.scripture_refs || []).map((r: any) => [r.reference, r.text, r.note].filter(Boolean).join(" | ")).join("\n")}
-            onChange={(e) => set({ scripture_refs: parsePipeLines(e.target.value).map(([reference, text, note]) => ({ key: slugify(reference || ""), reference: reference || "", text: text || "", note: note || undefined })).filter((r) => r.reference && r.text) })}
+            defaultValue={(value.scripture_refs || []).map((r: any) => serializeRow([r.reference, r.text, r.note])).join("\n")}
+            onChange={(e) => set({ scripture_refs: parseRows(e.target.value, 3).map(([reference, text, note]) => ({ key: slugify(reference || ""), reference: reference || "", text: text || "", note: note || undefined })).filter((r) => r.reference && r.text) })}
             rows={3}
             className="w-full input"
           />
@@ -390,8 +382,8 @@ function BlockForm({
       <div>
         <label className="field-label">One takeaway per line, as &quot;Heading | Body&quot;</label>
         <textarea
-          defaultValue={(value.items || []).map((i: any) => [i.heading, i.body].filter(Boolean).join(" | ")).join("\n")}
-          onChange={(e) => set({ items: parsePipeLines(e.target.value).map(([heading, body]) => ({ heading: heading || "", body: body || "" })).filter((i) => i.heading) })}
+          defaultValue={(value.items || []).map((i: any) => serializeRow([i.heading, i.body])).join("\n")}
+          onChange={(e) => set({ items: parseRows(e.target.value, 2).map(([heading, body]) => ({ heading: heading || "", body: body || "" })).filter((i) => i.heading) })}
           rows={4}
           className="w-full input"
         />
@@ -403,10 +395,23 @@ function BlockForm({
 }
 
 function ResourcesTextarea({ value, onChange }: { value: Record<string, any>; onChange: (next: Record<string, any>) => void }) {
+  const items: { label: string; url: string }[] = value.items || [];
+  const canonical = items.map((i) => serializeRow([i.label, i.url])).join("\n");
+  const [raw, setRaw] = useState(canonical);
+  // An upload appends an item from outside this box: show it. Typing never triggers this
+  // because what was typed already parses to the same items.
+  useEffect(() => {
+    const typed = parseRows(raw, 2).map(([label, url]) => serializeRow([label, url])).join("\n");
+    if (typed !== canonical) setRaw(canonical);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canonical]);
   return (
     <textarea
-      value={(value.items || []).map((i: any) => [i.label, i.url].filter(Boolean).join(" | ")).join("\n")}
-      onChange={(e) => onChange({ ...value, items: parsePipeLines(e.target.value).map(([label, url]) => ({ label: label || "", url: url || "", downloadable: true })).filter((i) => i.label) })}
+      value={raw}
+      onChange={(e) => {
+        setRaw(e.target.value);
+        onChange({ ...value, items: parseRows(e.target.value, 2).map(([label, url]) => ({ label: label || "", url: url || "", downloadable: true })).filter((i) => i.label) });
+      }}
       rows={4}
       className="w-full input"
       placeholder={"Study guide | https://…\nScripture sheet | https://…"}
