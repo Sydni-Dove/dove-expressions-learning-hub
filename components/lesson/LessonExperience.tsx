@@ -350,6 +350,7 @@ export default function LessonExperience({
               onOpenNotes={() => setNotesOpen(true)}
               onOpenScriptureList={openScriptureList}
               hasScriptures={allScriptureRefs.length > 0}
+              hideRelatedResources={practical}
             />
           </div>
         </div>

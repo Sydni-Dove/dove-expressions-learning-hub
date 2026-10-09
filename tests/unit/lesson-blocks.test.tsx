@@ -74,6 +74,24 @@ describe("LessonIntro stage tracker", () => {
 
 import LessonToolbox from "@/components/lesson/LessonToolbox";
 
+describe("LessonToolbox Related Resources and Download Transcript", () => {
+  const p = { lessonId: "l", userId: "u", lessonTitle: "T", lessonNotesText: "", transcriptText: "", initiallyBookmarked: false, onOpenNotes: () => {}, onOpenScriptureList: () => {} };
+  it("Download Transcript is hidden when there is no transcript, shown when there is", () => {
+    const { unmount } = render(<LessonToolbox {...p} />);
+    expect(screen.queryByText("Download Transcript")).toBeNull();
+    unmount();
+    render(<LessonToolbox {...p} transcriptText="00:01  hello" />);
+    expect(screen.getByText("Download Transcript")).toBeInTheDocument();
+  });
+  it("Related Resources shows by default (existing courses) and is hidden for practical lessons", () => {
+    const { unmount } = render(<LessonToolbox {...p} />);
+    expect(screen.getByText("Related Resources")).toBeInTheDocument();
+    unmount();
+    render(<LessonToolbox {...p} hideRelatedResources />);
+    expect(screen.queryByText("Related Resources")).toBeNull();
+  });
+});
+
 describe("LessonToolbox Scripture List", () => {
   const props = { lessonId: "l", userId: "u", lessonTitle: "T", lessonNotesText: "", transcriptText: "", initiallyBookmarked: false, onOpenNotes: () => {}, onOpenScriptureList: () => {} };
   it("shows the button when the lesson has scriptures (default)", () => {

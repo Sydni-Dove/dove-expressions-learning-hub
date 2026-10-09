@@ -25,7 +25,8 @@ export default function LessonToolbox({
   initiallyBookmarked,
   onOpenNotes,
   onOpenScriptureList,
-  hasScriptures = true
+  hasScriptures = true,
+  hideRelatedResources = false
 }: {
   lessonId: string;
   userId: string;
@@ -37,6 +38,8 @@ export default function LessonToolbox({
   onOpenScriptureList: () => void;
   /** false hides the Scripture List button (nothing to list). */
   hasScriptures?: boolean;
+  /** true hides the Related Resources link (it opens the prototype Library, not this course's resources). */
+  hideRelatedResources?: boolean;
 }) {
   const [bookmarked, setBookmarked] = useState(initiallyBookmarked);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
@@ -82,26 +85,29 @@ export default function LessonToolbox({
       >
         Download Lesson Notes
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          downloadText(`${lessonTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-transcript.txt`, transcriptText);
-          setStatus("Transcript downloaded");
-          setTimeout(() => setStatus(""), 2200);
-        }}
-        disabled={!transcriptText}
-        className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy disabled:opacity-40"
-      >
-        Download Transcript
-      </button>
+      {transcriptText && (
+        <button
+          type="button"
+          onClick={() => {
+            downloadText(`${lessonTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-transcript.txt`, transcriptText);
+            setStatus("Transcript downloaded");
+            setTimeout(() => setStatus(""), 2200);
+          }}
+          className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy"
+        >
+          Download Transcript
+        </button>
+      )}
       {hasScriptures && (
         <button type="button" onClick={onOpenScriptureList} className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
           Scripture List
         </button>
       )}
-      <Link href="/library" className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
-        Related Resources
-      </Link>
+      {!hideRelatedResources && (
+        <Link href="/library" className="min-h-[42px] rounded-control border border-charcoal/10 bg-white px-3 py-2.5 text-left font-body text-sm text-charcoal/75 transition hover:border-burgundy/30 hover:text-burgundy">
+          Related Resources
+        </Link>
+      )}
       <button
         type="button"
         onClick={toggleBookmark}

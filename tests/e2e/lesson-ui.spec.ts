@@ -72,3 +72,14 @@ test('practical lessons hide the four-step tracker and an empty Scripture List; 
   await page.goto('/dev/lesson-preview?style=reflective');
   await expect(page.locator('[aria-label="Lesson stages"]')).toBeVisible();
 });
+
+test('practical lessons hide Related Resources; Download Transcript is hidden without a transcript; reflective keeps Related Resources', async ({ page }) => {
+  await page.goto('/dev/lesson-preview?style=practical');
+  await expect(page.getByRole('link', { name: 'Related Resources' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download Transcript' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'My Lesson Notes' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Bookmark Lesson/ })).toBeVisible();
+  await page.goto('/dev/lesson-preview?style=reflective');
+  await expect(page.getByRole('link', { name: 'Related Resources' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download Transcript' })).toHaveCount(0);
+});
