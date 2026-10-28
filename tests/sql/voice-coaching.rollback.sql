@@ -117,6 +117,19 @@ do $$begin
  if not exists(select 1 from dp_lesson_progress where user_id=auth.uid() and lesson_id='f0f00000-0000-4000-8000-000000000041' and status='completed' and completion_method='instructor_review') then raise exception 'Reviewed lesson progress missing'; end if;
 end$$;
 reset role;
+-- Exercise the Voice-specific completion rule with fixture-only course/enrollment rows.
+update dp_courses set program_id=(select id from dp_programs where slug='vocal-coaching') where id='f0f00000-0000-4000-8000-000000000021';
+insert into dp_enrollments(user_id,scope_type,scope_id,status) values
+ ('f0f00000-0000-4000-8000-000000000001','course','f0f00000-0000-4000-8000-000000000021','active');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+do $$begin
+ begin
+ update dp_lesson_progress set completion_method='student_marked' where lesson_id='f0f00000-0000-4000-8000-000000000041' and user_id=auth.uid();
+ raise exception 'Student bypassed Voice completion review';
+ exception when raise_exception then if sqlerrm='Student bypassed Voice completion review' then raise; end if; end;
+end$$;
+reset role;
 update dp_enrollments set status='withdrawn' where user_id='f0f00000-0000-4000-8000-000000000001';
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000001","role":"authenticated"}',true);

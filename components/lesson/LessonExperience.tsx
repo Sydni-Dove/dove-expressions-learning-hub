@@ -40,7 +40,8 @@ export default function LessonExperience({
   reflectionForm,
   lessonStyle = "reflective",
   nav,
-  myBuildHref
+  myBuildHref,
+  coachingPractice
 }: {
   lessonId: string;
   lessonTitle: string;
@@ -64,8 +65,9 @@ export default function LessonExperience({
   lessonStyle?: "reflective" | "practical";
   nav?: { previousId: string | null; nextId: string | null; isLast: boolean };
   myBuildHref?: string;
+  coachingPractice?: React.ReactNode;
 }) {
-  const practical = lessonStyle === "practical";
+  const practical = lessonStyle === "practical" || !!coachingPractice;
   const [notesOpen, setNotesOpen] = useState(false);
   const [scriptureOpen, setScriptureOpen] = useState(false);
   const [activeScripture, setActiveScripture] = useState<ScriptureRef | null>(null);
@@ -328,7 +330,7 @@ export default function LessonExperience({
                 <p className="py-8 font-body text-charcoal/60">This lesson&rsquo;s content is still being built.</p>
               )}
 
-              <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} practical={practical} myBuildHref={myBuildHref} />
+              {coachingPractice ?? <LessonCompletion courseId={courseId} isComplete={isComplete} markCompleteButton={markCompleteButton} practical={practical} myBuildHref={myBuildHref} />}
 
               {nav && <LessonNav courseId={courseId} previousId={nav.previousId} nextId={nav.nextId} isLast={nav.isLast} />}
 
@@ -368,3 +370,4 @@ export default function LessonExperience({
     </div>
   );
 }
+

@@ -14,6 +14,7 @@ second enrollment, submission, lesson, feedback, or curriculum system.
 
 - Instructor lesson builder: individual enrolled student or course/program audience,
   editable song, goal, pacing, instructions, checklist and due date.
+- Voice lessons link directly to guided practice rather than spiritual reflection or an app-building workspace; students cannot self-mark Voice completion.
 - Student assignments: guided checklist, minutes, reflection, recording link,
   explicit save/reload, submit, revision after return, shared feedback and completion.
 - Existing instructor queue includes revised work. Private review notes are separate
@@ -44,6 +45,7 @@ Applied via Supabase MCP (CLI unavailable in this environment):
 - `20261028180736_dp_voice_review_updates_lesson_progress`
 - `20261028181226_dp_voice_review_progress_status_type`
 - `20261028181439_dp_voice_notes_policy_recursion_fix`
+- `20261028193254_dp_voice_completion_requires_instructor_review`
 
 The migration filenames use the actual server-generated versions. No real enrollment
 rows were changed. Confirmed four Voice courses unpublished, all 12 lessons draft,
@@ -63,7 +65,7 @@ Local dependency installation is blocked: configured shell proxy is unreachable 
 `npm ci --offline` reports missing cached packages. GitHub Actions compensates for this:
 TypeScript, 36 unit tests (including saved draft restoration, revision, save failure,
 preview and atomic feedback), 23 SQL replay tests, and production build passed on commit
-`46a89a5`. Final expanded SQL fixtures and progress migrations are being checked again.
+`46a89a5`. Expanded SQL fixtures and progress migrations also passed in green CI on `91db69d`. The final lesson-to-practice link and completion guard are undergoing one final CI run.
 CI provisions pinned ESLint tooling because the original lockfile omits it. Existing
 cosmetic JSX quotation findings now report as warnings; other lint checks remain active.
 Authenticated browser verification remains pending; do not describe it as passed.
@@ -71,7 +73,7 @@ Authenticated browser verification remains pending; do not describe it as passed
 ## Deployment and remaining blockers
 
 Application changes are not merged or deployed to production. Database changes are live.
-Draft PR #2 is open on `codex/voice-persistent-coaching`; final CI status will be recorded after verification. Instructor must author and
+Draft PR #2 is open on `codex/voice-persistent-coaching`; CI passed on `91db69d`; the final small lesson navigation change is awaiting its last check. Instructor must author and
 publish ready lessons/courses through existing builders and manage enrollment through
 authorized existing systems. No student access was granted for testing.
 
