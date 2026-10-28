@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { EmptyState, Pill } from "@/components/ui";
+import PrivateReviewNote from "@/components/PrivateReviewNote";
 import FeedbackForm from "@/components/FeedbackForm";
 
 export default async function SubmissionReviewPage({ params }: { params: { submissionId: string } }) {
@@ -23,7 +24,7 @@ export default async function SubmissionReviewPage({ params }: { params: { submi
   const { data: profile } = await supabase.from("profiles").select("full_name,email").eq("id", submission.student_id).maybeSingle();
   const { data: feedback } = await supabase
     .from("dp_feedback")
-    .select("id,content,created_at,author_id")
+    .select("id,content,created_at,author_id,is_private")
     .eq("submission_id", submission.id)
     .order("created_at", { ascending: false });
 
@@ -50,7 +51,7 @@ export default async function SubmissionReviewPage({ params }: { params: { submi
           <ul className="mt-3 space-y-1">
             {submission.file_urls.map((u: string) => (
               <li key={u}>
-                <a href={u} target="_blank" rel="noreferrer" className="font-ui text-sm text-burgundy underline">
+                <a href={/^https:\/\//i.test(u) ? u : undefined} target="_blank" rel="noreferrer" className="font-ui text-sm text-burgundy underline">
                   {u}
                 </a>
               </li>
@@ -61,10 +62,11 @@ export default async function SubmissionReviewPage({ params }: { params: { submi
 
       {(feedback ?? []).length > 0 && (
         <div>
-          <h2 className="font-display text-lg text-burgundy">Previous feedback</h2>
+          <h2 className="font-display text-lg text-burgundy">Review history</h2>
           <div className="mt-2 space-y-2">
             {feedback!.map((f) => (
               <div key={f.id} className="card p-4">
+                <p className="font-ui text-xs font-bold text-burgundy">{f.is_private ? "Instructor-private note" : "Shared with student"}</p>
                 <p className="font-body text-sm text-charcoal/80">{f.content}</p>
                 <p className="mt-1 font-ui text-xs text-charcoal/40">{new Date(f.created_at).toLocaleDateString()}</p>
               </div>
@@ -73,7 +75,9 @@ export default async function SubmissionReviewPage({ params }: { params: { submi
         </div>
       )}
 
-      <FeedbackForm submissionId={submission.id} authorId={user!.id} />
+      <PrivateReviewNote submissionId={submission.id} authorId={user!.id} />
+      <FeedbackForm submissionId={submission.id} />
     </div>
   );
 }
+

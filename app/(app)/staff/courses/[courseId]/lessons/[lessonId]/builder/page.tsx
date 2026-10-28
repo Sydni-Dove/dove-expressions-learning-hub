@@ -21,7 +21,7 @@ export default async function LessonBuilderPage({ params }: { params: { courseId
 
   const [{ data: blocks }, { data: assignments }] = await Promise.all([
     supabase.from("dp_lesson_blocks").select("id,block_type,order_index,content").eq("lesson_id", lessonId).order("order_index"),
-    supabase.from("dp_assignments").select("id,title,assignment_type,due_at").eq("lesson_id", lessonId).order("created_at", { ascending: false })
+    supabase.from("dp_assignments").select("id,title,description,assignment_type,due_at,assigned_to_user_id,song,goal,pacing,practice_steps").eq("lesson_id", lessonId).order("created_at", { ascending: false })
   ]);
 
   return (
@@ -62,3 +62,4 @@ export default async function LessonBuilderPage({ params }: { params: { courseId
     </div>
   );
 }
+
