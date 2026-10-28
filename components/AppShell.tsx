@@ -30,6 +30,7 @@ import {
   Menu,
   X,
   Compass,
+  MicVocal,
   Map,
   type LucideIcon
 } from "lucide-react";
@@ -40,6 +41,7 @@ import { createClient } from "@/lib/supabase/client";
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/discipleship": Compass,
+  "/vocal-coaching": MicVocal,
   "/discipleship/journey": Map,
   "/program": BookOpen,
   "/courses": BookOpen,
