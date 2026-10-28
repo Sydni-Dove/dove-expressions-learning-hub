@@ -29,16 +29,30 @@ insert into dp_enrollments(user_id,scope_type,scope_id,status) values
 insert into dp_user_roles(user_id,role) values
  ('f0f00000-0000-4000-8000-000000000004','teacher'),
  ('f0f00000-0000-4000-8000-000000000005','teacher');
+insert into dp_role_assignments(user_id,role,course_id) values
+ ('f0f00000-0000-4000-8000-000000000005','teacher','f0f00000-0000-4000-8000-000000000022');
+insert into storage.objects(bucket_id,name) values
+ ('course-media-private','lessons/f0f00000-0000-4000-8000-000000000041/voice-fixture.mp3'),
+ ('course-media-private','lessons/f0f00000-0000-4000-8000-000000000042/creative-fixture.mp3');
+insert into dp_notes(author_id,title,linked_type,linked_id,visibility) values
+ ('f0f00000-0000-4000-8000-000000000005','Creative community fixture','lesson','f0f00000-0000-4000-8000-000000000042','community');
 insert into dp_class_teachers(course_id,user_id) values
  ('f0f00000-0000-4000-8000-000000000021','f0f00000-0000-4000-8000-000000000004');
 -- Fixture assignments inserted as the authorized teacher, exercising scope validation.
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000004","role":"authenticated"}',true);
+insert into dp_sessions(id,student_id,mentor_id,program_id,session_type,student_visible_notes,private_faculty_notes) values
+ ('f0f00000-0000-4000-8000-000000000071','f0f00000-0000-4000-8000-000000000001','f0f00000-0000-4000-8000-000000000004','f0f00000-0000-4000-8000-000000000011','follow_up','Shared session summary','Private session secret');
 insert into dp_assignments(id,course_id,lesson_id,assigned_to_user_id,title,practice_steps) values
  ('f0f00000-0000-4000-8000-000000000051','f0f00000-0000-4000-8000-000000000021','f0f00000-0000-4000-8000-000000000041','f0f00000-0000-4000-8000-000000000001','Voice practice',array['Warm up','Record']);
 select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 do $$begin
  if not dp_can_access_course('f0f00000-0000-4000-8000-000000000021') then raise exception 'Voice membership denied'; end if;
+ if exists(select 1 from dp_sessions where id='f0f00000-0000-4000-8000-000000000071') then raise exception 'Student read private session row'; end if;
+ if not exists(select 1 from dp_my_session_summaries('fixture-voice') where student_visible_notes='Shared session summary') then raise exception 'Shared session summary missing'; end if;
+ if exists(select 1 from storage.objects where name='lessons/f0f00000-0000-4000-8000-000000000042/creative-fixture.mp3') then raise exception 'Cross-program file leaked'; end if;
+ if not exists(select 1 from storage.objects where name='lessons/f0f00000-0000-4000-8000-000000000041/voice-fixture.mp3') then raise exception 'Voice file missing'; end if;
+ if exists(select 1 from dp_notes where title='Creative community fixture') then raise exception 'Cross-program note leaked'; end if;
  if dp_can_access_course('f0f00000-0000-4000-8000-000000000022') then raise exception 'Cross-program open-course bypass'; end if;
  if exists(select 1 from dp_lessons where id in ('f0f00000-0000-4000-8000-000000000042','f0f00000-0000-4000-8000-000000000043')) then raise exception 'Other program/draft leaked'; end if;
 end$$;
@@ -87,6 +101,9 @@ update dp_submissions set content='{"response":"Revised practice"}',status='revi
 select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000005","role":"authenticated"}',true);
 do $$begin
  if exists(select 1 from dp_submissions where id='f0f00000-0000-4000-8000-000000000061') then raise exception 'Unassigned teacher read submission'; end if;
+ if dp_can_access_course('f0f00000-0000-4000-8000-000000000021') then raise exception 'Scoped teacher course boundary failed'; end if;
+ if not dp_can_access_course('f0f00000-0000-4000-8000-000000000022') then raise exception 'Scoped teacher preview denied'; end if;
+ if exists(select 1 from storage.objects where name='lessons/f0f00000-0000-4000-8000-000000000041/voice-fixture.mp3') then raise exception 'Scoped teacher read another program file'; end if;
  begin
  perform dp_review_submission('f0f00000-0000-4000-8000-000000000061','Unauthorized','approved');
  raise exception 'Unassigned teacher reviewed work';
@@ -97,6 +114,15 @@ select dp_review_submission('f0f00000-0000-4000-8000-000000000061','Well done','
 select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 do $$begin
  if not exists(select 1 from dp_submissions where id='f0f00000-0000-4000-8000-000000000061' and status='approved') then raise exception 'Progress approval did not persist'; end if;
+ if not exists(select 1 from dp_lesson_progress where user_id=auth.uid() and lesson_id='f0f00000-0000-4000-8000-000000000041' and status='completed' and completion_method='instructor_review') then raise exception 'Reviewed lesson progress missing'; end if;
+end$$;
+reset role;
+update dp_enrollments set status='withdrawn' where user_id='f0f00000-0000-4000-8000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"f0f00000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+do $$begin
+ if exists(select 1 from dp_assignment_progress where assignment_id='f0f00000-0000-4000-8000-000000000051') then raise exception 'Withdrawn student retained practice access'; end if;
+ if exists(select 1 from dp_my_session_summaries('fixture-voice')) then raise exception 'Withdrawn student retained session access'; end if;
 end$$;
 reset role;
 rollback;
