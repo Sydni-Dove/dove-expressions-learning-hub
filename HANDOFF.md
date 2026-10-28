@@ -59,13 +59,12 @@ other-program and draft lesson denial, personalized assignment privacy, saved dr
 readback, submission, student self-approval denial, authorized teacher draft preview,
 private instructor review, shared feedback visibility, returned work revision,
 unassigned/scoped teacher denial, private-file and program-linked-note isolation, private session-row denial with safe shared summaries, withdrawn enrollment denial, approval and updated student-visible lesson progress. A pre-existing notes/shares policy recursion discovered by these tests was also fixed.
-The reusable script is `tests/sql/voice-coaching.rollback.sql`; fixtures do not remain.
+The reusable script is `tests/sql/voice-coaching.rollback.sql`; fixtures do not remain. Final database checks confirmed zero fixture users and zero published Voice courses or lessons.
 
 Local dependency installation is blocked: configured shell proxy is unreachable and
 `npm ci --offline` reports missing cached packages. GitHub Actions compensates for this:
 TypeScript, 36 unit tests (including saved draft restoration, revision, save failure,
-preview and atomic feedback), 23 SQL replay tests, and production build passed on commit
-`46a89a5`. Expanded SQL fixtures and progress migrations also passed in green CI on `91db69d`. The final lesson-to-practice link and completion guard are undergoing one final CI run.
+preview and atomic feedback), 23 SQL replay tests, lint, and production build passed. Final code commit `9913ce5` passed all checks, including expanded SQL fixtures, the lesson-to-practice link, and the instructor completion guard. CI evidence: https://github.com/Sydni-Dove/dove-expressions-learning-hub/actions/runs/40767994300
 CI provisions pinned ESLint tooling because the original lockfile omits it. Existing
 cosmetic JSX quotation findings now report as warnings; other lint checks remain active.
 Authenticated browser verification remains pending; do not describe it as passed.
@@ -73,7 +72,7 @@ Authenticated browser verification remains pending; do not describe it as passed
 ## Deployment and remaining blockers
 
 Application changes are not merged or deployed to production. Database changes are live.
-Draft PR #2 is open on `codex/voice-persistent-coaching`; CI passed on `91db69d`; the final small lesson navigation change is awaiting its last check. Instructor must author and
+Draft PR #2 is open on `codex/voice-persistent-coaching`; Final code CI passed on `9913ce5`. Instructor must author and
 publish ready lessons/courses through existing builders and manage enrollment through
 authorized existing systems. No student access was granted for testing.
 
