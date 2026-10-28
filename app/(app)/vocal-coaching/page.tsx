@@ -36,6 +36,7 @@ export default async function VocalCoachingPage() {
   const visibleNotes = (sessions ?? []).filter(s => s.student_visible_notes);
   const nextSession = (sessions ?? []).filter(s => s.scheduled_at && new Date(s.scheduled_at) >= new Date()).sort((a,b) => new Date(a.scheduled_at!).getTime()-new Date(b.scheduled_at!).getTime())[0];
   const cards = [
+    { href: "/voice/training", title: "12-session vocal program", detail: "Explore technique, song coaching, practice activities, and progress checkpoints.", icon: BookOpen },
     { href: "/assignments", title: "Practice & assignments", detail: "Submit your assigned exercises, songs, and recording links.", icon: ClipboardList },
     { href: "/live", title: "Sessions & workshops", detail: "See instructor-led sessions and learning events.", icon: CalendarDays },
     { href: "/library", title: "Training resources", detail: "Browse available learning materials and vocal resources.", icon: BookOpen },
