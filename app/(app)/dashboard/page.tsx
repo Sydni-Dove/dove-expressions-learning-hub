@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getStudentPrograms } from "@/lib/student-programs";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
@@ -13,6 +14,16 @@ export default async function DashboardPage() {
   const supabase = createClient();
   const { user, roles } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
+  const assignedPrograms = await getStudentPrograms(user.id);
+  const isStaff = roles.some(role => ["faculty","teacher","mentor","super_admin"].includes(role));
+  if (!isStaff && assignedPrograms.length === 1) {
+    if (assignedPrograms[0] === "voice") redirect("/voice");
+    if (assignedPrograms[0] === "creative") redirect("/creative-studio");
+    if (assignedPrograms[0] === "discipleship") redirect("/discipleship");
+  }
+  if (!isStaff && assignedPrograms.length === 0) {
+    return <div className="card p-8"><h1 className="font-display text-3xl text-burgundy">Welcome to Dove Expressions</h1><p className="mt-3 font-body text-charcoal/70">Your learning program has not been assigned yet. Please contact your instructor to activate your student access.</p></div>;
+  }
   const displayName = (user?.user_metadata as { full_name?: string })?.full_name?.split(" ")[0] || "Friend";
 
   const [{ data: course }, { data: plan }, { data: wiringResult }, { data: liveSessions }, { data: notes }] =
