@@ -17,8 +17,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # The existing lint script has no ESLint dependency in the application lockfile.
+      - run: npm install --no-save --package-lock=false eslint@8.57.1 eslint-config-next@14.2.35
       - run: npm run lint
-      - run: npm test
-      - run: npm run test:sql
-      - run: cp .env.local.example .env.local
-      - run: npm run build
+      - if: always()
+        run: npm test
+      - if: always()
+        run: npm run test:sql
+      - if: always()
+        run: cp .env.local.example .env.local
+      - if: always()
+        run: npm run build
