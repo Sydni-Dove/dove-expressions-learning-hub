@@ -18,6 +18,7 @@ export const studentNavGroups: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", roles: ["student", "guest"] },
       { href: "/discipleship", label: "Discipleship", roles: ["student"] },
+      { href: "/vocal-coaching", label: "Vocal Coaching", roles: ["student"] },
       { href: "/program", label: "My Program", roles: ["student"] },
       { href: "/courses", label: "Courses", roles: ["student"] },
       { href: "/creative-studio", label: "Creative Studio", roles: ["student"] },
