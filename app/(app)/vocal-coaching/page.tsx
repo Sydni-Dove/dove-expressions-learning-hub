@@ -38,11 +38,11 @@ export default async function VocalCoachingPage() {
     <div className="space-y-8 pb-16">
       <header className="rounded-card-lg bg-burgundy-gradient p-6 text-soft sm:p-8">
         <div className="flex items-center gap-2 text-sm font-ui text-soft/75"><MicVocal className="h-5 w-5" /> Vocal & Creative Arts</div>
-        <h1 className="mt-3 font-display text-3xl text-soft">My Vocal Coaching</h1>
-        <p className="mt-2 max-w-2xl font-body text-soft/85">Your place for coaching feedback, practice assignments, lessons, and workshops. Only instructor-shared notes appear here.</p>
+        <h1 className="mt-3 font-display text-3xl text-soft">Voice Learning Home</h1>
+        <p className="mt-2 max-w-2xl font-body text-soft/85">Your dedicated home for vocal development. Find your coaching feedback, practice assignments, lessons, and workshops in one place. Only instructor-shared notes appear here.</p>
       </header>
       <section>
-        <h2 className="font-display text-2xl text-burgundy">Your learning tools</h2>
+        <h2 className="font-display text-2xl text-burgundy">Your Voice Studio</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {cards.map(({ href, title, detail, icon: Icon }) => (
             <Link key={href} href={href} className="card card-hover flex gap-3 p-5">
