@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { studentNavGroups, staffNav } from "@/components/nav-config";
 import type { DpRole } from "@/lib/types";
+import type { StudentProgram } from "@/lib/student-programs";
 import { createClient } from "@/lib/supabase/client";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -107,13 +108,24 @@ function NavList({
   );
 }
 
-function StudentNavGroups({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function StudentNavGroups({ pathname, programs, onNavigate }: { pathname: string; programs: StudentProgram[]; onNavigate?: () => void }) {
+  const isVoice = programs.includes("voice");
+  const isDisciple = programs.includes("discipleship");
+  const isCreative = programs.includes("creative");
+  const permitted = (href: string) => {
+    if (["/profile", "/help", "/report"].includes(href)) return true;
+    if (href === "/voice") return isVoice;
+    if (href === "/creative-studio") return isCreative;
+    if (["/discipleship", "/discipleship/journey", "/wiring", "/plan", "/prayer", "/notes", "/program"].includes(href)) return isDisciple;
+    if (href === "/dashboard") return false;
+    return programs.length > 0;
+  };
   return (
     <>
-      {studentNavGroups.map((group) => (
+      {studentNavGroups.filter(group => group.items.some(item => permitted(item.href))).map((group) => (
         <div key={group.label} className="mb-6">
           <p className="mb-2 px-4 font-ui text-xs font-semibold uppercase tracking-wide text-soft/40">{group.label}</p>
-          <NavList items={group.items} pathname={pathname} onNavigate={onNavigate} />
+          <NavList items={group.items.filter(item => permitted(item.href))} pathname={pathname} onNavigate={onNavigate} />
         </div>
       ))}
     </>
@@ -122,10 +134,12 @@ function StudentNavGroups({ pathname, onNavigate }: { pathname: string; onNaviga
 
 export default function AppShell({
   roles,
+  programs,
   userLabel,
   children
 }: {
   roles: DpRole[];
+  programs: StudentProgram[];
   userLabel: string;
   children: React.ReactNode;
 }) {
@@ -151,7 +165,7 @@ export default function AppShell({
           <span className="font-display text-xl text-soft">Dove Expressions</span>
         </div>
         <nav aria-label="Primary" className="flex-1 overflow-y-auto px-4 py-4">
-          {isStudent && <StudentNavGroups pathname={pathname} />}
+          {isStudent && <StudentNavGroups pathname={pathname} programs={programs} />}
           {isStaff && (
             <div className="mb-6">
               <p className="mb-2 px-4 font-ui text-xs font-semibold uppercase tracking-wide text-soft/40">Staff</p>
@@ -212,7 +226,7 @@ export default function AppShell({
               </button>
             </div>
             <nav aria-label="Primary" className="flex-1 px-4 py-4">
-              {isStudent && <StudentNavGroups pathname={pathname} onNavigate={() => setMobileOpen(false)} />}
+              {isStudent && <StudentNavGroups pathname={pathname} programs={programs} onNavigate={() => setMobileOpen(false)} />}
               {isStaff && (
                 <div className="mb-6">
                   <p className="mb-2 px-4 font-ui text-xs font-semibold uppercase tracking-wide text-soft/40">Staff</p>
