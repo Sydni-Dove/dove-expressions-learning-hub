@@ -7,10 +7,11 @@ import { getCurrentUserAndRoles } from "@/lib/roles";
 import { BookOpen, CalendarDays, ClipboardList, MicVocal, MessageSquare, Music2, Video } from "lucide-react";
 
 export default async function VocalCoachingPage() {
-  const { user } = await getCurrentUserAndRoles();
+  const { user, roles } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
   const programs = await getStudentPrograms(user.id);
-  if (!programs.includes("voice")) redirect("/dashboard");
+  const isStaff = roles.some(r => ["faculty", "teacher", "super_admin"].includes(r));
+  if (!isStaff && !programs.includes("voice")) redirect("/dashboard");
   const supabase = createClient();
 
   // RLS determines which student sessions and course enrollments are readable.
