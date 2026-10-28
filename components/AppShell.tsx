@@ -42,6 +42,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/discipleship": Compass,
   "/vocal-coaching": MicVocal,
+  "/voice": MicVocal,
   "/discipleship/journey": Map,
   "/program": BookOpen,
   "/courses": BookOpen,
