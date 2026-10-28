@@ -83,7 +83,7 @@ export default async function VocalCoachingPage() {
       </section>
       <section className="card p-5">
         <div className="flex items-center gap-2"><Video className="h-5 w-5 text-burgundy" /><h2 className="font-display text-xl text-burgundy">Student testimonials</h2></div>
-        <p className="mt-2 font-body text-sm text-charcoal/70">Share your experience through a written review or video link. Every submission is private until reviewed, and public use requires your separate permission.\n        </p><VoiceReviewForm studentId={user.id} /><p className="hidden"></p>
+        <p className="mt-2 font-body text-sm text-charcoal/70">Share your experience through a written review or video link. Every submission is private until reviewed, and public use requires your separate permission.\n        </p><VoiceReviewForm studentId={user.id} />
       </section>
     </div>
   );
