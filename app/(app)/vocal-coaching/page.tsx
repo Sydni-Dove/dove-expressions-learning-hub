@@ -4,7 +4,7 @@ import { getStudentPrograms } from "@/lib/student-programs";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
-import { BookOpen, CalendarDays, ClipboardList, MicVocal, MessageSquare, Music2, Video, ArrowUpRight, Sparkles, Headphones, CheckCircle2 } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardList, MessageSquare, Music2, Video, ArrowUpRight, Sparkles, Headphones, CheckCircle2 } from "lucide-react";
 
 export default async function VocalCoachingPage() {
   const { user, roles } = await getCurrentUserAndRoles();
@@ -49,7 +49,7 @@ export default async function VocalCoachingPage() {
         <div aria-hidden="true" className="pointer-events-none absolute bottom-[-110px] right-[12%] h-64 w-64 rounded-full bg-[#D96248]/20 blur-3xl" />
         <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-ui text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F2DFD8]"><MicVocal className="h-4 w-4" /> Dove Expressions · Voice Studio</p>
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-ui text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F2DFD8]">Dove Expressions · Voice Studio</p>
             <h1 className="mt-6 font-display text-4xl leading-tight text-white sm:text-5xl">Find your voice.<br/><span className="italic text-[#F2DFD8]">Develop your gift.</span></h1>
             <p className="mt-4 max-w-md font-body text-base leading-relaxed text-white/80">Welcome, {firstName}. Your personal space for vocal growth, intentional practice, and confident expression.</p>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -57,11 +57,7 @@ export default async function VocalCoachingPage() {
               <Link href="/assignments" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">Practice assignments</Link>
             </div>
           </div>
-          <div className="relative mx-auto flex h-44 w-44 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 sm:h-56 sm:w-56">
-            <div className="absolute inset-4 rounded-full border border-dashed border-white/30"/>
-            <MicVocal className="h-20 w-20 text-[#F2DFD8] sm:h-24 sm:w-24" strokeWidth={1.1}/>
-            <span className="absolute -bottom-3 rounded-full bg-[#E6A742] px-4 py-2 font-ui text-[11px] font-bold uppercase tracking-[0.1em] text-[#1B1717]">Your voice matters</span>
-          </div>
+
         </div>
       </header>
 
