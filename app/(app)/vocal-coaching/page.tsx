@@ -1,5 +1,6 @@
 import Link from "next/link";
 import VoiceReviewForm from "@/components/VoiceReviewForm";
+import { getStudentPrograms } from "@/lib/student-programs";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
@@ -8,6 +9,8 @@ import { BookOpen, CalendarDays, ClipboardList, MicVocal, MessageSquare, Music2,
 export default async function VocalCoachingPage() {
   const { user } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
+  const programs = await getStudentPrograms(user.id);
+  if (!programs.includes("voice")) redirect("/dashboard");
   const supabase = createClient();
 
   // RLS determines which student sessions and course enrollments are readable.
