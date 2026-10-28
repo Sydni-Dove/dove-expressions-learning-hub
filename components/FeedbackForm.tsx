@@ -10,7 +10,7 @@ const NEXT_STATUS = [
   { value: "exempt", label: "Mark exempt" }
 ];
 
-export default function FeedbackForm({ submissionId, authorId }: { submissionId: string; authorId: string }) {
+export default function FeedbackForm({ submissionId }: { submissionId: string }) {
   const router = useRouter();
   const supabase = createClient();
   const [content, setContent] = useState("");
@@ -26,24 +26,11 @@ export default function FeedbackForm({ submissionId, authorId }: { submissionId:
     setSaving(true);
     setError(null);
 
-    const { error: feedbackError } = await supabase.from("dp_feedback").insert({
-      submission_id: submissionId,
-      author_id: authorId,
-      content: content.trim(),
-      is_private: false
+    const { error: reviewError } = await supabase.rpc("dp_review_submission", {
+      target_id: submissionId, feedback_text: content.trim(), next_status: status
     });
-    if (feedbackError) {
-      setSaving(false);
-      setError(feedbackError.message);
-      return;
-    }
-
-    const { error: statusError } = await supabase.from("dp_submissions").update({ status }).eq("id", submissionId);
     setSaving(false);
-    if (statusError) {
-      setError(statusError.message);
-      return;
-    }
+    if (reviewError) { setError(reviewError.message); return; }
 
     setContent("");
     router.refresh();
@@ -52,16 +39,16 @@ export default function FeedbackForm({ submissionId, authorId }: { submissionId:
   return (
     <div className="card space-y-3 p-5">
       <h2 className="font-display text-lg text-burgundy">Leave feedback</h2>
-      <textarea
+      <label className="block font-ui text-sm">Feedback shared with the student<textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         rows={4}
         placeholder="Visible to the student."
         className="w-full input"
-      />
+      /></label>
       <div>
-        <label className="mb-1 block font-ui text-sm font-semibold text-charcoal">Update status to</label>
-        <select
+        <label htmlFor="review-outcome" className="mb-1 block font-ui text-sm font-semibold text-charcoal">Update status to</label>
+        <select id="review-outcome"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
           className="input"
@@ -80,3 +67,4 @@ export default function FeedbackForm({ submissionId, authorId }: { submissionId:
     </div>
   );
 }
+

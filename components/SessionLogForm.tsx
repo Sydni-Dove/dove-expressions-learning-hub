@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -10,6 +10,13 @@ export default function SessionLogForm({ studentId, mentorId }: { studentId: str
   const router = useRouter();
   const supabase = createClient();
 
+  const [programId, setProgramId] = useState("");
+  const [programs, setPrograms] = useState<{id:string;name:string}[]>([]);
+  useEffect(() => {
+    let active = true;
+    createClient().rpc("dp_student_session_programs", {target_student_id:studentId}).then(({data}) => { if(active) setPrograms(data ?? []); });
+    return () => { active = false; };
+  }, [studentId]);
   const [sessionType, setSessionType] = useState<SessionType>("follow_up");
   const [agenda, setAgenda] = useState("");
   const [studentVisibleNotes, setStudentVisibleNotes] = useState("");
@@ -37,6 +44,7 @@ export default function SessionLogForm({ studentId, mentorId }: { studentId: str
 
     setSaving(true);
     const { error: insertError } = await supabase.from("dp_sessions").insert({
+      program_id: programId || null,
       student_id: studentId,
       mentor_id: mentorId,
       session_type: sessionType,
@@ -63,6 +71,7 @@ export default function SessionLogForm({ studentId, mentorId }: { studentId: str
 
   return (
     <form onSubmit={handleSubmit} className="card space-y-5 p-6">
+      <label className="block font-ui text-sm">Program<select required value={programId} onChange={e=>setProgramId(e.target.value)} className="input mt-1 w-full"><option value="">Choose the coaching program</option>{programs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <div>
         <label className="mb-1 block font-ui text-sm font-semibold text-charcoal">Session type</label>
         <select
@@ -184,3 +193,4 @@ export default function SessionLogForm({ studentId, mentorId }: { studentId: str
     </form>
   );
 }
+

@@ -14,27 +14,16 @@ export default async function VocalCoachingPage() {
   if (!isStaff && !programs.includes("voice")) redirect("/dashboard");
   const supabase = createClient();
 
-  // RLS determines which student sessions and course enrollments are readable.
-  const [{ data: sessions }, { data: enrollments }] = await Promise.all([
-    supabase.from("dp_sessions")
-      .select("id,scheduled_at,session_type,student_visible_notes,follow_up_date")
-      .eq("student_id", user.id)
-      .order("scheduled_at", { ascending: false })
-      .limit(12),
-    supabase.from("dp_enrollments")
-      .select("scope_id,status")
-      .eq("user_id", user.id)
-      .eq("scope_type", "course")
-      .eq("status", "active")
+  // Both program and course enrollments are resolved by the same database policy.
+  const [{ data: sessions }, { data: courses }] = await Promise.all([
+    supabase.rpc("dp_my_session_summaries", {target_program_slug:"vocal-coaching"}),
+    supabase.from("dp_courses").select("id,title,description,dp_programs!inner(slug)")
+      .eq("dp_programs.slug", "vocal-coaching").order("order_index")
   ]);
-  const courseIds = (enrollments ?? []).map((e) => e.scope_id);
-  const { data: courses } = courseIds.length
-    ? await supabase.from("dp_courses").select("id,title,description").in("id", courseIds)
-    : { data: [] as { id: string; title: string; description: string | null }[] };
 
   const firstName = ((user.user_metadata as {full_name?:string})?.full_name || "Student").split(" ")[0];
-  const visibleNotes = (sessions ?? []).filter(s => s.student_visible_notes);
-  const nextSession = (sessions ?? []).filter(s => s.scheduled_at && new Date(s.scheduled_at) >= new Date()).sort((a,b) => new Date(a.scheduled_at!).getTime()-new Date(b.scheduled_at!).getTime())[0];
+  const visibleNotes = (sessions ?? []).filter((s: {student_visible_notes:string|null}) => s.student_visible_notes);
+  const nextSession = (sessions ?? []).filter((s: {scheduled_at:string|null}) => s.scheduled_at && new Date(s.scheduled_at) >= new Date()).sort((a: {scheduled_at:string|null},b: {scheduled_at:string|null}) => new Date(a.scheduled_at!).getTime()-new Date(b.scheduled_at!).getTime())[0];
   const cards = [
     { href: "/voice/training", title: "12-session vocal program", detail: "Explore technique, song coaching, practice activities, and progress checkpoints.", icon: BookOpen },
     { href: "/assignments", title: "Practice & assignments", detail: "Submit your assigned exercises, songs, and recording links.", icon: ClipboardList },
@@ -89,7 +78,7 @@ export default async function VocalCoachingPage() {
 
       <section className="grid gap-5 lg:grid-cols-5">
         <div className="rounded-3xl border border-[#630000]/10 bg-white p-6 lg:col-span-3"><div className="flex items-center gap-2"><MessageSquare className="h-5 w-5 text-[#630000]"/><h2 className="font-display text-2xl text-[#630000]">From your coach</h2></div><p className="mt-2 font-body text-sm text-charcoal/60">Feedback and takeaways shared after your sessions.</p>
-        {visibleNotes.length?<div className="mt-5 space-y-3">{visibleNotes.slice(0,3).map(s=><article key={s.id} className="rounded-xl bg-[#F2DFD8]/35 p-4"><p className="font-ui text-xs font-bold uppercase text-[#630000]">{s.session_type.replace(/_/g," ")} {s.scheduled_at&&" · "+new Date(s.scheduled_at).toLocaleDateString()}</p><p className="mt-2 whitespace-pre-wrap font-body text-sm text-charcoal/75">{s.student_visible_notes}</p></article>)}</div>:<p className="mt-5 rounded-xl bg-[#F2DFD8]/30 p-5 font-body text-sm text-charcoal/70">When your coach shares your first session summary, it will appear here.</p>}</div>
+        {visibleNotes.length?<div className="mt-5 space-y-3">{visibleNotes.slice(0,3).map((s: {id:string;session_type:string;scheduled_at:string|null;student_visible_notes:string|null})=><article key={s.id} className="rounded-xl bg-[#F2DFD8]/35 p-4"><p className="font-ui text-xs font-bold uppercase text-[#630000]">{s.session_type.replace(/_/g," ")} {s.scheduled_at&&" · "+new Date(s.scheduled_at).toLocaleDateString()}</p><p className="mt-2 whitespace-pre-wrap font-body text-sm text-charcoal/75">{s.student_visible_notes}</p></article>)}</div>:<p className="mt-5 rounded-xl bg-[#F2DFD8]/30 p-5 font-body text-sm text-charcoal/70">When your coach shares your first session summary, it will appear here.</p>}</div>
         <div className="rounded-3xl border border-[#630000]/10 bg-[#F2DFD8]/40 p-6 lg:col-span-2"><Sparkles className="h-7 w-7 text-[#630000]"/><h2 className="mt-4 font-display text-2xl text-[#630000]">Your next breakthrough</h2><p className="mt-3 font-body text-sm leading-relaxed text-charcoal/75">Growth happens through consistent practice. Revisit your assignments, apply your feedback, and bring your questions to your next session.</p><Link href="/assignments" className="mt-6 inline-flex items-center gap-2 font-ui text-sm font-bold text-[#630000] underline">Go to my practice <ArrowUpRight className="h-4 w-4"/></Link></div>
       </section>
 
@@ -101,3 +90,4 @@ export default async function VocalCoachingPage() {
     </div>
   );
 }
+

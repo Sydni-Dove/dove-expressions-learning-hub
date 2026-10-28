@@ -35,7 +35,7 @@ export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip
   const db = new PGlite();
   await db.exec(BOOTSTRAP);
   const dir = path.join(__dirname, "../../supabase/migrations");
-  const files = fs.readdirSync(dir).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
+  const files = fs.readdirSync(dir).filter((f) => /^(?:\d{4}|\d{14})_.*\.sql$/.test(f)).sort();
   const applied: string[] = [];
   for (const f of files) {
     if (opts.upTo && f.slice(0, 4) > opts.upTo) break;
@@ -58,3 +58,4 @@ export async function asUser<T = any>(db: PGlite, uid: string | null, sql: strin
     await db.exec(`reset role; set app.uid = ''; set app.role = '';`);
   }
 }
+
