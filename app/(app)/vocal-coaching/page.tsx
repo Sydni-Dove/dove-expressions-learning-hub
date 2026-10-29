@@ -1,6 +1,7 @@
 import Link from "next/link";
 import VoiceReviewForm from "@/components/VoiceReviewForm";
 import RecordingPlayer from "@/components/RecordingPlayer";
+import MyTestimonials, { type MyTestimonial } from "@/components/voice/MyTestimonials";
 import LocalTime from "@/components/LocalTime";
 import { ProgressBar, Pill } from "@/components/ui";
 import { getStudentPrograms } from "@/lib/student-programs";
@@ -51,6 +52,7 @@ export default async function VocalCoachingPage() {
     }
   }
 
+  const mine = isStudent ? ((await supabase.from("dp_voice_testimonials").select("id,review_text,video_path,allow_public_use,status,published_at,consent_withdrawn_at,created_at").eq("student_id", user.id).order("created_at", { ascending: false })).data ?? []) as MyTestimonial[] : [];
   const summary = summarizeAssignments(assignments, submissions, drafts);
   const credits = creditsSummary(overview);
   const recordingAttempts = attempts.filter(t => (t.file_urls ?? []).length).slice(0, 3);
@@ -98,8 +100,9 @@ export default async function VocalCoachingPage() {
         <Stat icon={<BookOpen className="h-5 w-5" />} label="Lessons remaining" value={credits.hasPackages ? String(credits.total) : "—"}
           note={credits.hasPackages ? (credits.byMinutes.map(x => `${x.count} × ${x.minutes} min`).join(" · ") || "No lessons available") : "Appears when your coaching package is recorded"} />
       </section>
-      {credits.hasPackages && (credits.low || credits.expiringSoon || credits.pendingPayment) && <p role="note" className="rounded-2xl border border-[#E6A742]/50 bg-[#E6A742]/10 p-4 font-body text-sm">
+      {credits.hasPackages && (credits.low || credits.expiringSoon || credits.pendingPayment || credits.installments.length > 0) && <p role="note" className="rounded-2xl border border-[#E6A742]/50 bg-[#E6A742]/10 p-4 font-body text-sm">
         {credits.pendingPayment && "Your payment is still being confirmed. "}
+        {credits.installments.map((n, i) => <span key={i}>Payment {n.paid} of {n.total} received: {n.unlocked} of {n.lessons} lessons unlocked. </span>)}
         {credits.low && !credits.pendingPayment && "You have one or no lessons left. "}
         {credits.expiringSoon && credits.soonestExpiry && <>A package expires {credits.soonestExpiry.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })}. </>}
         <a href={`https://doveexpressions.org/book-${overview?.packages?.[0]?.lesson_minutes === 45 ? 45 : 60}/`} className="font-semibold underline">Renew or add lessons</a>
@@ -176,6 +179,7 @@ export default async function VocalCoachingPage() {
         <h2 className="font-display text-2xl text-[#630000]">Your voice. Your experience.</h2>
         <p className="mt-3 font-body text-sm text-[#1B1717]/70">Submit a written or video testimonial. It stays private until your instructor approves it, and it is only used publicly if you give permission below.</p>
         <VoiceReviewForm studentId={user.id} />
+        <MyTestimonials items={mine} />
       </section>
     </div>
   );

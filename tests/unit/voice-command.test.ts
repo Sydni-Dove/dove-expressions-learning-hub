@@ -67,3 +67,16 @@ describe("student dashboard state", () => {
     expect(creditsSummary(null, now)).toMatchObject({ hasPackages: false, total: 0, low: false });
   });
 });
+
+describe("installment plans", () => {
+  const pkg = (o: object): any => ({ credits_total: 12, credits_remaining: 0, payment_status: "partial", expires_at: null, usable: true, renewed: false, lesson_minutes: 60, student_id: "s", package_id: "p", ...o });
+  it("tells the instructor when the next installment is what is holding lessons back", () => {
+    expect(renewalAttention([pkg({})], now)[0].reason).toMatch(/installment/i);
+    expect(renewalAttention([pkg({ credits_remaining: 3 })], now)).toEqual([]);
+  });
+  it("tells the student how many lessons a partial payment has unlocked", () => {
+    const c = creditsSummary({ credits_by_minutes: { "60": 4 }, packages: [{ credits_total: 12, remaining: 4, credits_unlocked: 4, installments_total: 3, installments_paid: 1, lesson_minutes: 60, payment_status: "partial", expires_at: null, purchased_at: "" }] } as any, now);
+    expect(c.installments).toEqual([{ paid: 1, total: 3, unlocked: 4, lessons: 12 }]);
+    expect(c.total).toBe(4);
+  });
+});

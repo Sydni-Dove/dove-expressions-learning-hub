@@ -43,7 +43,11 @@ node testing/local-supabase/run.mjs down    # delete the stack
    automatic progress, goal progress.
 6. Unauthorized access: other students and a scoped teacher cannot read recordings, work, goals; no signed URLs; no self-approval.
 7. Testimonials: consent captured, approval required, publish gate enforced by the database.
-Responsive: phone 390, tablet 820, desktop 1440 for student, instructor and admin pages (no horizontal overflow, controls at
+8. Public testimonial page as a signed-out visitor (consented, approved, published only; first name only; video plays), consent
+   withdrawal in the app (page and video stop being served; staff cannot republish), deletion.
+9. Store payments through the real webhook route: bad signatures, unknown products and unmatched emails rejected; a 12-lesson,
+   3-payment package unlocks 4, 8, then 12 lessons; replays and refunds behave; quantity 2 refused; the dashboard says what is unlocked.
+Responsive: phone 390, tablet 820, desktop 1440 for student, instructor, admin and the public testimonial page (no horizontal overflow, controls at
 least 24 px, screenshots saved to `screenshots/`).
 
 ## Smoke checklist for the real project after approval (30 minutes, one test student you create and delete)

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createHmac } from "node:crypto";
 import { F, accessToken, API, ANON, login, rest, type Who } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -401,5 +402,163 @@ test.describe("7. Testimonials need consent and approval", () => {
     const noConsent = rows.find((r: { allow_public_use: boolean }) => !r.allow_public_use);
     const forced = await rest("admin", `dp_voice_testimonials?id=eq.${noConsent.id}`, { method: "PATCH", body: JSON.stringify({ published_at: new Date().toISOString() }) });
     expect(forced.status).toBeGreaterThanOrEqual(400);
+  });
+});
+
+test.describe("8. Public testimonial page and consent withdrawal", () => {
+  const PUBLIC_TEXT = "Public page words: I found my voice.";
+  async function publicVisit(browser: import("@playwright/test").Browser) {
+    const ctx = await browser.newContext(); const page = await ctx.newPage();
+    await page.goto("/testimonials"); await page.waitForLoadState("networkidle");
+    return { ctx, page };
+  }
+  test("a signed-out visitor sees nothing before publication", async ({ browser }) => {
+    const { ctx, page } = await publicVisit(browser);
+    await expect(page.getByRole("heading", { name: "Student voices" })).toBeVisible();
+    await expect(page.getByText("No student stories have been shared yet.")).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("My confidence has grown so much.");
+    await ctx.close();
+  });
+  test("student submits, admin approves and publishes, and a visitor can read and watch it", async ({ browser }) => {
+    const s = await login(browser, "voiceOnly");
+    await s.page.goto("/voice");
+    const form = s.page.locator("form", { hasText: "Submit for review" });
+    await form.getByLabel("Your experience").fill(PUBLIC_TEXT);
+    await form.getByLabel(/Video testimonial/).setInputFiles({ name: "public.mp4", mimeType: "video/mp4", buffer: REC });
+    await form.getByRole("checkbox").check();
+    await form.getByRole("button", { name: "Submit for review" }).click();
+    await expect(form.getByRole("status")).toContainText("submitted for review");
+    await s.page.reload();
+    await expect(s.page.getByText("Submitted. Waiting for review. Nothing is public until it is approved.").first()).toBeVisible();
+    await s.ctx.close();
+    const a = await login(browser, "admin");
+    await a.page.goto("/staff/voice-reviews");
+    const card = a.page.locator("article", { hasText: PUBLIC_TEXT });
+    await card.getByRole("button", { name: "Approve" }).click();
+    await card.getByRole("button", { name: "Mark as published" }).click();
+    await expect(card.getByText("Published")).toBeVisible();
+    await a.ctx.close();
+    const { ctx, page } = await publicVisit(browser);
+    const item = page.locator("li", { hasText: PUBLIC_TEXT });
+    await expect(item).toBeVisible();
+    await expect(item.getByText("Vera", { exact: true })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("Vera Voice"); // first name only
+    await expect(page.locator("body")).not.toContainText("Private thank-you note"); // unconsented stays private
+    await expect(page.locator("body")).not.toContainText("My confidence has grown so much."); // earlier one was unpublished
+    const src = await item.locator("video").getAttribute("src");
+    expect((await page.request.get(src!)).status()).toBe(200);
+    await ctx.close();
+  });
+  test("student withdraws permission in the app and the page and video stop being served", async ({ browser }) => {
+    const s = await login(browser, "voiceOnly");
+    await s.page.goto("/voice");
+    const mine = s.page.locator("li", { hasText: PUBLIC_TEXT });
+    await expect(mine.getByText("Published on the public page.")).toBeVisible();
+    await mine.getByRole("button", { name: "Withdraw public permission" }).click();
+    await expect(s.page.getByRole("status").filter({ hasText: "Permission withdrawn" })).toBeVisible();
+    await s.page.reload();
+    await expect(s.page.locator("li", { hasText: PUBLIC_TEXT }).getByText("You withdrew permission. It is not shown publicly.")).toBeVisible();
+    await expect(s.page.locator("li", { hasText: PUBLIC_TEXT }).getByRole("button", { name: "Withdraw public permission" })).toHaveCount(0);
+    await s.ctx.close();
+    const { ctx, page } = await publicVisit(browser);
+    await expect(page.locator("body")).not.toContainText(PUBLIC_TEXT);
+    await expect(page.getByText("No student stories have been shared yet.")).toBeVisible();
+    // a new signed link for the video can no longer be obtained by anyone signed out
+    const rows = await (await rest("admin", "dp_voice_testimonials?select=video_path,consent_withdrawn_at&consent_withdrawn_at=not.is.null")).json();
+    expect(rows).toHaveLength(1);
+    const sign = await fetch(`${API}/storage/v1/object/sign/voice-testimonials/${rows[0].video_path}`, { method: "POST", headers: { apikey: ANON, "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 60 }) });
+    expect(sign.status).toBeGreaterThanOrEqual(400);
+    await ctx.close();
+    // the administrator sees the withdrawal and cannot publish it, even by calling the API
+    const a = await login(browser, "admin");
+    await a.page.goto("/staff/voice-reviews");
+    const card = a.page.locator("article", { hasText: PUBLIC_TEXT });
+    await expect(card.getByText("Public-use permission: withdrawn by the student")).toBeVisible();
+    await expect(card.getByRole("button", { name: "Mark as published" })).toHaveCount(0);
+    const id = (await (await rest("admin", `dp_voice_testimonials?select=id&review_text=eq.${encodeURIComponent(PUBLIC_TEXT)}`)).json())[0].id;
+    expect((await rest("admin", `dp_voice_testimonials?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ published_at: new Date().toISOString() }) })).status).toBeGreaterThanOrEqual(400);
+    expect((await rest("admin", `dp_voice_testimonials?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ allow_public_use: true, consent_withdrawn_at: null }) })).status).toBeGreaterThanOrEqual(400);
+    await a.ctx.close();
+  });
+  test("student can delete a testimonial entirely", async ({ browser }) => {
+    const s = await login(browser, "voiceOnly");
+    await s.page.goto("/voice");
+    const form = s.page.locator("form", { hasText: "Submit for review" });
+    await form.getByLabel("Your experience").fill("Temporary note to delete.");
+    await form.getByRole("button", { name: "Submit for review" }).click();
+    await expect(form.getByRole("status")).toContainText("submitted privately");
+    await s.page.reload();
+    s.page.once("dialog", (d) => d.accept());
+    await s.page.locator("li", { hasText: "Temporary note to delete." }).getByRole("button", { name: "Delete" }).click();
+    await expect(s.page.getByRole("status").filter({ hasText: "Testimonial deleted" })).toBeVisible();
+    await s.page.reload();
+    await expect(s.page.getByText("Temporary note to delete.")).toHaveCount(0);
+    await s.ctx.close();
+  });
+});
+
+test.describe("9. Store payments: installments never over-grant (webhook against the real route)", () => {
+  const SECRET = "local-test-webhook-secret";
+  const post = async (order: object, secret = SECRET) => {
+    const body = JSON.stringify(order);
+    const sig = createHmac("sha256", secret).update(body).digest("base64");
+    return fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", headers: { "content-type": "application/json", "x-wc-webhook-signature": sig }, body });
+  };
+  const order = (id: number, status: string, product: number, email = F.users.multi.email, qty = 1) => ({ id, status, billing: { email }, line_items: [{ id: id * 10, product_id: product, quantity: qty }] });
+  const remaining = async () => {
+    const o = await (await rest("multi", "rpc/dp_my_coaching_overview", { method: "POST", body: JSON.stringify({ target_program_slug: "vocal-coaching" }) })).json();
+    return o.packages.find((p: { installments_total: number }) => p.installments_total === 3);
+  };
+  test("an instructor links a 12-lesson, 3-payment package to a store product", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice/packages");
+    await page.getByLabel("Name").fill("12-week 60 (test)");
+    await page.getByLabel("Store product IDs (comma separated)").fill("9002");
+    await page.getByLabel("Number of lessons").fill("12");
+    await page.getByLabel("Number of payments in the store").fill("3");
+    await page.getByRole("button", { name: "Create package" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Package created" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(/12 × 60 min · no expiry · 3 payments/)).toBeVisible();
+    // one store product cannot sell two active packages
+    await page.getByLabel("Name").fill("Duplicate link");
+    await page.getByLabel("Store product IDs (comma separated)").fill("9002");
+    await page.getByRole("button", { name: "Create package" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "only one active package" })).toBeVisible();
+    await ctx.close();
+  });
+  test("rejects unsigned, wrongly signed and unknown-product requests", async () => {
+    expect((await post(order(7000, "completed", 9002), "wrong-secret")).status).toBe(401);
+    const unsigned = await fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", body: JSON.stringify(order(7000, "completed", 9002)) });
+    expect(unsigned.status).toBe(401);
+    const unknown = await post(order(7001, "completed", 424242));
+    expect(unknown.status).toBe(200);
+    expect((await unknown.json()).recorded).toBe(0);
+    expect(await remaining()).toBeUndefined();
+    expect((await post(order(7002, "completed", 9002, "nobody@fixture.test"))).status).toBe(422);
+  });
+  test("payment 1 unlocks 4 of 12, payment 2 unlocks 8, payment 3 unlocks all; replays change nothing", async () => {
+    expect((await post(order(7100, "on-hold", 9002))).status).toBe(200);
+    expect(await remaining()).toMatchObject({ credits_total: 12, credits_unlocked: 0, remaining: 0, payment_status: "pending" });
+    expect((await post(order(7100, "processing", 9002))).status).toBe(200);
+    expect(await remaining()).toMatchObject({ credits_unlocked: 4, remaining: 4, installments_paid: 1, payment_status: "partial" });
+    await post(order(7100, "processing", 9002)); // replay
+    expect(await remaining()).toMatchObject({ credits_unlocked: 4, installments_paid: 1 });
+    expect((await post(order(7101, "completed", 9002))).status).toBe(200);
+    expect(await remaining()).toMatchObject({ credits_unlocked: 8, remaining: 8, installments_paid: 2 });
+    expect((await post(order(7102, "completed", 9002))).status).toBe(200);
+    expect(await remaining()).toMatchObject({ credits_unlocked: 12, remaining: 12, installments_paid: 3, payment_status: "paid" });
+    const packs = await (await rest("admin", `dp_coaching_packages?select=id&student_id=eq.${F.ids.multi}`)).json();
+    expect(packs).toHaveLength(1);
+    expect((await post(order(7102, "refunded", 9002))).status).toBe(200);
+    expect(await remaining()).toMatchObject({ credits_unlocked: 8, installments_paid: 2, payment_status: "partial" });
+    expect((await post(order(7200, "completed", 9002, F.users.multi.email, 2))).status).toBe(500);
+  });
+  test("the student dashboard says what a partial payment has unlocked", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "multi");
+    await page.goto("/voice");
+    await expect(page.getByRole("note").filter({ hasText: "Payment 2 of 3 received: 8 of 12 lessons unlocked." })).toBeVisible();
+    await expect(page.getByText("Lessons remaining").locator("..").locator("..")).toContainText("8");
+    await ctx.close();
   });
 });

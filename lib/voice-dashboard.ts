@@ -40,12 +40,12 @@ export type CoachingOverview = {
   upcoming: { id: string; scheduled_at: string; lesson_minutes: number }[];
   history: { id: string; scheduled_at: string; lesson_minutes: number; appointment_status: string }[];
   credits_by_minutes: Record<string, number>;
-  packages: { credits_total: number; remaining: number; lesson_minutes: number; payment_status: string; expires_at: string | null; purchased_at: string }[];
+  packages: { credits_total: number; remaining: number; credits_unlocked?: number; installments_total?: number; installments_paid?: number; lesson_minutes: number; payment_status: string; expires_at: string | null; purchased_at: string }[];
 };
 
 export function creditsSummary(o: CoachingOverview | null, now = new Date()) {
   const packages = o?.packages ?? [];
-  const usable = packages.filter(p => ["paid", "complimentary"].includes(p.payment_status) && (!p.expires_at || new Date(p.expires_at) > now) && p.remaining > 0);
+  const usable = packages.filter(p => ["paid", "partial", "complimentary"].includes(p.payment_status) && (!p.expires_at || new Date(p.expires_at) > now) && p.remaining > 0);
   const expiries = usable.filter(p => p.expires_at).map(p => new Date(p.expires_at!)).sort((a, b) => a.getTime() - b.getTime());
   const byMinutes = Object.entries(o?.credits_by_minutes ?? {}).map(([m, n]) => ({ minutes: Number(m), count: Number(n) })).filter(x => x.count > 0).sort((a, b) => a.minutes - b.minutes);
   const total = byMinutes.reduce((n, x) => n + x.count, 0);
@@ -54,6 +54,8 @@ export function creditsSummary(o: CoachingOverview | null, now = new Date()) {
     hasPackages: packages.length > 0, total, byMinutes, soonestExpiry: soonest,
     expiringSoon: !!soonest && soonest.getTime() - now.getTime() < 14 * 86400000,
     pendingPayment: packages.some(p => p.payment_status === "pending"),
+    installments: packages.filter(p => (p.installments_total ?? 1) > 1 && (p.installments_paid ?? 0) < (p.installments_total ?? 1) && p.payment_status === "partial")
+      .map(p => ({ paid: p.installments_paid ?? 0, total: p.installments_total ?? 1, unlocked: p.credits_unlocked ?? 0, lessons: p.credits_total })),
     low: packages.length > 0 && total <= 1
   };
 }

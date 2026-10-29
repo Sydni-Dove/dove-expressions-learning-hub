@@ -146,6 +146,8 @@ create table dp_coaching_tiers(
  personal_plan boolean not null default false,
  assessments_included int not null default 0 check(assessments_included>=0),
  recording_feedback_included int not null default 0 check(recording_feedback_included>=0),
+ -- Number of payments the store collects for this package. With more than one, lessons unlock in proportion to payments received.
+ installments int not null default 1 check(installments between 1 and 12),
  woo_product_ids text[] not null default '{}',
  is_active boolean not null default true, sort_order int not null default 0,
  created_at timestamptz not null default now(), unique(program_id,slug));
@@ -170,7 +172,9 @@ create table dp_coaching_packages(
  program_id uuid not null references dp_programs(id),
  lesson_minutes int not null check(lesson_minutes in (45,60)),
  credits_total int not null check(credits_total>0),
- payment_status text not null default 'pending' check(payment_status in ('pending','paid','complimentary','refunded','failed')),
+ payment_status text not null default 'pending' check(payment_status in ('pending','partial','paid','complimentary','refunded','failed')),
+ installments_total int not null default 1 check(installments_total between 1 and 12),
+ installments_paid int not null default 0 check(installments_paid>=0),
  purchased_at timestamptz not null default now(),
  expires_at timestamptz,
  renewal_of uuid references dp_coaching_packages(id),
@@ -184,6 +188,60 @@ create table dp_coaching_packages(
 create unique index dp_coaching_packages_external on dp_coaching_packages(source,external_order_id,coalesce(external_line_item_id,''))
  where external_order_id is not null;
 create index dp_coaching_packages_student_idx on dp_coaching_packages(student_id,program_id);
+
+-- One row per payment the store reports for a package (one for ordinary packages, several for installment plans).
+create table dp_package_payments(
+ id uuid primary key default gen_random_uuid(),
+ package_id uuid not null references dp_coaching_packages(id) on delete cascade,
+ external_order_id text not null, external_line_item_id text,
+ status text not null check(status in ('pending','paid','refunded','failed')),
+ recorded_at timestamptz not null default now());
+create unique index dp_package_payments_external on dp_package_payments(external_order_id,coalesce(external_line_item_id,''));
+create index dp_package_payments_package_idx on dp_package_payments(package_id);
+alter table dp_package_payments enable row level security;
+grant select on dp_package_payments to authenticated;
+create policy dp_package_payments_read on dp_package_payments for select to authenticated
+ using(exists(select 1 from dp_coaching_packages p where p.id=package_id and (p.student_id=auth.uid() or dp_private.manage_program(p.program_id))));
+
+-- Lessons a student may use now. Installment plans unlock in proportion to payments received (12 lessons over 3 payments:
+-- 4, then 8, then 12), so a first installment can never grant the whole package.
+create or replace function dp_private.unlocked_credits(total int,itotal int,ipaid int,status text) returns int
+language sql immutable as $$
+ select case when status in ('paid','complimentary') then total
+  when status='partial' then least(total,floor(total::numeric*greatest(ipaid,0)/greatest(itotal,1))::int) else 0 end
+$$;
+
+-- Lessons already taught before a payment arrived are charged to the package once enough lessons are unlocked.
+create or replace function dp_private.settle_unfunded(pid uuid) returns void
+language plpgsql security definer set search_path=public as $$
+declare k dp_coaching_packages; room int;
+begin
+ select * into k from dp_coaching_packages where id=pid;
+ if k.id is null or k.payment_status not in ('paid','partial','complimentary') then return; end if;
+ perform pg_advisory_xact_lock(hashtext(k.student_id::text));
+ room:=dp_private.unlocked_credits(k.credits_total,k.installments_total,k.installments_paid,k.payment_status)
+  -(select count(*) from dp_sessions s where s.package_id=pid and s.appointment_status in ('completed','late_cancelled','no_show'));
+ if room<=0 then return; end if;
+ update dp_sessions set package_id=pid where id in (
+  select s.id from dp_sessions s where s.student_id=k.student_id and s.program_id is not distinct from k.program_id and s.package_id is null
+   and s.appointment_status in ('completed','late_cancelled','no_show') and s.lesson_minutes=k.lesson_minutes
+   and (k.expires_at is null or coalesce(s.scheduled_at,now())<k.expires_at) order by s.scheduled_at limit room);
+end $$;
+
+-- Recompute a store-managed package's status from its payment rows.
+create or replace function dp_private.refresh_package(pid uuid) returns void
+language plpgsql security definer set search_path=public as $$
+declare src text; itotal int; paid int; pend int; refunded int; st text;
+begin
+ select source,installments_total into src,itotal from dp_coaching_packages where id=pid;
+ if src is distinct from 'woocommerce' then return; end if;
+ select count(*) filter(where status='paid'),count(*) filter(where status='pending'),count(*) filter(where status='refunded')
+  into paid,pend,refunded from dp_package_payments where package_id=pid;
+ st:=case when paid>=itotal then 'paid' when paid>0 then 'partial' when refunded>0 then 'refunded' when pend>0 then 'pending' else 'failed' end;
+ update dp_coaching_packages set installments_paid=paid,payment_status=st where id=pid;
+ perform dp_private.settle_unfunded(pid);
+end $$;
+
 
 alter table dp_sessions add column if not exists lesson_minutes int check(lesson_minutes in (45,60));
 alter table dp_sessions add column if not exists appointment_status text
@@ -241,9 +299,9 @@ begin
    perform pg_advisory_xact_lock(hashtext(new.student_id::text));
    select p.id into new.package_id from dp_coaching_packages p
    where p.student_id=new.student_id and p.program_id is not distinct from new.program_id
-    and p.lesson_minutes=new.lesson_minutes and p.payment_status in ('paid','complimentary')
+    and p.lesson_minutes=new.lesson_minutes and p.payment_status in ('paid','partial','complimentary')
     and (p.expires_at is null or p.expires_at>coalesce(new.scheduled_at,now()))
-    and p.credits_total>(select count(*) from dp_sessions s where s.package_id=p.id
+    and dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status)>(select count(*) from dp_sessions s where s.package_id=p.id
       and s.appointment_status in ('completed','late_cancelled','no_show') and s.id<>new.id)
    order by p.expires_at nulls last,p.purchased_at limit 1;
   end if;
@@ -257,9 +315,11 @@ create trigger dp_session_credit_assign before insert or update of appointment_s
 
 -- Lesson balances: remaining credits per package. Honors the caller's RLS.
 create view dp_package_balances with(security_invoker=true) as
-select p.id package_id,p.student_id,p.program_id,p.lesson_minutes,p.credits_total,p.payment_status,p.purchased_at,p.expires_at,
- p.renewal_of,p.credits_total-count(s.id)::int as credits_remaining,
- p.payment_status in ('paid','complimentary') and (p.expires_at is null or p.expires_at>now()) as usable,
+select p.id package_id,p.student_id,p.program_id,p.lesson_minutes,p.credits_total,p.payment_status,p.purchased_at,p.expires_at,p.renewal_of,
+ p.installments_total,p.installments_paid,
+ dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status) as credits_unlocked,
+ greatest(dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status)-count(s.id)::int,0) as credits_remaining,
+ p.payment_status in ('paid','partial','complimentary') and (p.expires_at is null or p.expires_at>now()) as usable,
  exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) as renewed,
  p.tier_name,p.resource_level,p.personal_plan,p.assessments_included,p.recording_feedback_included,
  -- Approximate: shared feedback given on recorded submissions during the package period.
@@ -326,8 +386,9 @@ returns jsonb language sql stable security definer set search_path=public as $$
    where e.user_id=auth.uid() and e.status in ('active','completed') and ((e.scope_type='program' and e.scope_id=prog.id)
    or (e.scope_type='course' and e.scope_id in (select c.id from dp_courses c where c.program_id=prog.id))))),
  sess as (select s.* from dp_sessions s,prog,ok where s.student_id=auth.uid() and s.program_id=prog.id and s.appointment_status is not null),
- bal as (select p.*,p.credits_total-(select count(*) from sess s where s.package_id=p.id
-   and s.appointment_status in ('completed','late_cancelled','no_show'))::int as remaining
+ bal as (select p.*,dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status) as unlocked,
+   greatest(dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status)-(select count(*) from sess s where s.package_id=p.id
+   and s.appointment_status in ('completed','late_cancelled','no_show'))::int,0) as remaining
    from dp_coaching_packages p,prog,ok where p.student_id=auth.uid() and p.program_id=prog.id)
  select case when not exists(select 1 from ok) then null else jsonb_build_object(
   'plan',(select to_jsonb(x) from (select cadence,lesson_minutes,lesson_time,weekday,timezone,status from dp_coaching_plans pl,prog
@@ -337,8 +398,8 @@ returns jsonb language sql stable security definer set search_path=public as $$
   'history',coalesce((select jsonb_agg(to_jsonb(x) order by x.scheduled_at desc) from (select id,scheduled_at,lesson_minutes,appointment_status from sess
      where appointment_status<>'scheduled' or scheduled_at<now() order by scheduled_at desc limit 12) x),'[]'),
   'credits_by_minutes',coalesce((select jsonb_object_agg(m,n) from (select lesson_minutes::text m,sum(remaining)::int n from bal
-     where payment_status in ('paid','complimentary') and (expires_at is null or expires_at>now()) group by lesson_minutes) c),'{}'),
-  'packages',coalesce((select jsonb_agg(to_jsonb(x) order by x.purchased_at desc) from (select credits_total,remaining,lesson_minutes,
+     where payment_status in ('paid','partial','complimentary') and (expires_at is null or expires_at>now()) group by lesson_minutes) c),'{}'),
+  'packages',coalesce((select jsonb_agg(to_jsonb(x) order by x.purchased_at desc) from (select credits_total,remaining,unlocked as credits_unlocked,installments_total,installments_paid,lesson_minutes,
      payment_status,expires_at,purchased_at,tier_name,resource_level,personal_plan,assessments_included,recording_feedback_included,
      (select count(*)::int from dp_feedback f join dp_submissions sb on sb.id=f.submission_id
        where sb.student_id=auth.uid() and not f.is_private and cardinality(sb.file_urls)>0
@@ -361,11 +422,11 @@ begin
   and not exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) order by purchased_at desc limit 1;
  insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,expires_at,renewal_of,source,
   external_order_id,external_line_item_id,product_sku,tier_id,tier_name,resource_level,personal_plan,assessments_included,
-  recording_feedback_included,created_by)
+  recording_feedback_included,created_by,installments_total,installments_paid)
  values(student,t.program_id,t.lesson_minutes,t.lesson_count*quantity,pay_status,
   coalesce(expiry_override,case when t.valid_days is null then null else now()+make_interval(days=>t.valid_days) end),prev,src,
   order_id,line_item_id,sku,t.id,t.name,t.resource_level,t.personal_plan,t.assessments_included*quantity,
-  t.recording_feedback_included*quantity,creator)
+  t.recording_feedback_included*quantity,creator,t.installments,case when pay_status in ('paid','complimentary') then t.installments else 0 end)
  returning id into result;
  return result;
 end $$;
@@ -384,19 +445,36 @@ end $$;
 revoke all on function public.dp_create_package(uuid,uuid,text,int,timestamptz) from public,anon;
 grant execute on function public.dp_create_package(uuid,uuid,text,int,timestamptz) to authenticated;
 
--- Payment entitlement writer for the WooCommerce webhook (service role only, idempotent).
+-- Payment entitlement writer for the WooCommerce webhook (service role only, idempotent per order line).
+-- Ordinary packages: one package per paid order line. Installment packages (tier.installments > 1): each paid order line is one
+-- payment on the student's open package for that tier, and lessons unlock in proportion to payments received.
 create or replace function public.dp_record_package_purchase(student uuid,tier uuid,quantity int,order_id text,line_item_id text,
  sku text,pay_status text) returns uuid language plpgsql security definer set search_path=public as $$
-declare pid uuid;
+declare pid uuid; t dp_coaching_tiers;
 begin
  if pay_status not in ('pending','paid','refunded','failed') then raise exception 'Unsupported payment status'; end if;
- select id into pid from dp_coaching_packages where source='woocommerce' and external_order_id=order_id
-  and coalesce(external_line_item_id,'')=coalesce(line_item_id,'');
+ select package_id into pid from dp_package_payments where external_order_id=order_id and coalesce(external_line_item_id,'')=coalesce(line_item_id,'');
  if pid is not null then
-  update dp_coaching_packages set payment_status=pay_status where id=pid;
+  update dp_package_payments set status=pay_status,recorded_at=now()
+   where external_order_id=order_id and coalesce(external_line_item_id,'')=coalesce(line_item_id,'');
+  perform dp_private.refresh_package(pid);
   return pid;
  end if;
- return dp_private.create_package(student,tier,quantity,pay_status,null,'woocommerce',order_id,line_item_id,sku,null);
+ select * into t from dp_coaching_tiers where id=tier;
+ if t.id is null then raise exception 'Package type not found'; end if;
+ if t.installments>1 then
+  if quantity<>1 then raise exception 'Installment packages must be bought one payment at a time'; end if;
+  select p.id into pid from dp_coaching_packages p
+   where p.student_id=student and p.tier_id=tier and p.source='woocommerce' and p.installments_total>1
+    and (select count(*) from dp_package_payments x where x.package_id=p.id and x.status in ('paid','pending'))<p.installments_total
+   order by p.purchased_at limit 1 for update;
+ end if;
+ if pid is null then
+  pid:=dp_private.create_package(student,tier,case when t.installments>1 then 1 else quantity end,'pending',null,'woocommerce',order_id,line_item_id,sku,null);
+ end if;
+ insert into dp_package_payments(package_id,external_order_id,external_line_item_id,status) values(pid,order_id,line_item_id,pay_status);
+ perform dp_private.refresh_package(pid);
+ return pid;
 end $$;
 revoke all on function public.dp_record_package_purchase(uuid,uuid,int,text,text,text,text) from public,anon,authenticated;
 grant execute on function public.dp_record_package_purchase(uuid,uuid,int,text,text,text,text) to service_role;
@@ -417,7 +495,7 @@ create policy dp_lesson_access_staff on dp_lesson_access for all to authenticate
 create or replace function dp_private.student_resource_level(uid uuid) returns int
 language sql stable security definer set search_path=public as $$
  select coalesce(max(resource_level),0)::int from dp_coaching_packages
- where student_id=uid and payment_status in ('paid','complimentary') and (expires_at is null or expires_at>now())
+ where student_id=uid and payment_status in ('paid','partial','complimentary') and (expires_at is null or expires_at>now())
 $$;
 create or replace function dp_private.lesson_level_ok(lid uuid, mid uuid) returns boolean
 language sql stable security definer set search_path=public as $$
@@ -456,6 +534,7 @@ create policy dp_consultations_staff on dp_consultation_inquiries for all to aut
 alter table dp_voice_testimonials add column if not exists consented_at timestamptz;
 alter table dp_voice_testimonials add column if not exists published_at timestamptz;
 alter table dp_voice_testimonials add column if not exists published_by uuid references auth.users(id);
+alter table dp_voice_testimonials add column if not exists consent_withdrawn_at timestamptz;
 alter table dp_voice_testimonials drop constraint if exists dp_voice_testimonials_content;
 alter table dp_voice_testimonials add constraint dp_voice_testimonials_content check(
  nullif(btrim(coalesce(review_text,'')),'') is not null or nullif(btrim(coalesce(video_url,'')),'') is not null or video_path is not null);
@@ -476,8 +555,13 @@ begin
   -- Reviewers decide status and publication only; submitted content and consent are immutable.
   if new.student_id<>old.student_id or new.review_text is distinct from old.review_text
    or new.video_url is distinct from old.video_url or new.video_path is distinct from old.video_path
-   or new.allow_public_use<>old.allow_public_use or new.consented_at is distinct from old.consented_at then
+   or new.consented_at is distinct from old.consented_at then
    raise exception 'Submitted testimonial content and consent cannot be changed';
+  end if;
+  -- Only the student's own withdrawal (dp_withdraw_testimonial_consent) may change consent, and only to withdraw it.
+  if new.allow_public_use<>old.allow_public_use or new.consent_withdrawn_at is distinct from old.consent_withdrawn_at then
+   if coalesce(current_setting('dp.withdraw',true),'')<>'1' or new.allow_public_use or old.consent_withdrawn_at is not null then
+    raise exception 'Submitted testimonial content and consent cannot be changed'; end if;
   end if;
   if new.published_at is not null and new.published_at is distinct from old.published_at and new.status<>'approved' then
    raise exception 'Only approved testimonials can be published';
@@ -491,6 +575,56 @@ begin
 end $$;
 create trigger dp_testimonial_guard before insert or update on dp_voice_testimonials
  for each row execute function dp_private.guard_testimonial();
+
+-- Student withdraws public-use permission: unpublishes at once and keeps the private record.
+create or replace function public.dp_withdraw_testimonial_consent(target_id uuid) returns void
+language plpgsql security definer set search_path=public as $$
+begin
+ if auth.uid() is null then raise exception 'Sign in first'; end if;
+ perform set_config('dp.withdraw','1',true);
+ update dp_voice_testimonials set allow_public_use=false,consent_withdrawn_at=now(),published_at=null,published_by=null
+  where id=target_id and student_id=auth.uid() and allow_public_use;
+ if not found then raise exception 'Nothing to withdraw'; end if;
+ perform set_config('dp.withdraw','',true);
+end $$;
+revoke all on function public.dp_withdraw_testimonial_consent(uuid) from public,anon;
+grant execute on function public.dp_withdraw_testimonial_consent(uuid) to authenticated;
+
+-- Student removes a testimonial entirely (the app then deletes the uploaded video, which becomes deletable once unreferenced).
+create or replace function public.dp_delete_my_testimonial(target_id uuid) returns text
+language plpgsql security definer set search_path=public as $$
+declare path text;
+begin
+ if auth.uid() is null then raise exception 'Sign in first'; end if;
+ delete from dp_voice_testimonials where id=target_id and student_id=auth.uid() returning video_path into path;
+ if not found then raise exception 'Testimonial not found'; end if;
+ return path;
+end $$;
+revoke all on function public.dp_delete_my_testimonial(uuid) from public,anon;
+grant execute on function public.dp_delete_my_testimonial(uuid) to authenticated;
+
+-- Public display: only approved, published testimonials whose student granted permission and has not withdrawn it.
+-- Shows the first name only. Video objects are served only while the testimonial stays published (policy below).
+create or replace function public.dp_public_testimonials()
+returns table(id uuid,display_name text,review_text text,video_path text,published_at timestamptz)
+language sql stable security definer set search_path=public as $$
+ select t.id,coalesce(nullif(split_part(btrim(coalesce(p.full_name,'')),' ',1),''),'A student'),t.review_text,t.video_path,t.published_at
+ from dp_voice_testimonials t left join profiles p on p.id=t.student_id
+ where t.published_at is not null and t.status='approved' and t.allow_public_use and t.consented_at is not null and t.consent_withdrawn_at is null
+ order by t.published_at desc limit 50
+$$;
+revoke all on function public.dp_public_testimonials() from public;
+grant execute on function public.dp_public_testimonials() to anon,authenticated;
+
+create or replace function public.dp_is_published_testimonial_video(obj text) returns boolean
+language sql stable security definer set search_path=public as $$
+ select exists(select 1 from dp_voice_testimonials t where t.video_path=obj and t.published_at is not null and t.status='approved'
+  and t.allow_public_use and t.consented_at is not null and t.consent_withdrawn_at is null)
+$$;
+revoke all on function public.dp_is_published_testimonial_video(text) from public;
+grant execute on function public.dp_is_published_testimonial_video(text) to anon,authenticated;
+create policy voice_testimonials_published_read on storage.objects for select to anon,authenticated
+ using(bucket_id='voice-testimonials' and public.dp_is_published_testimonial_video(name));
 
 revoke all on all functions in schema dp_private from public,anon;
 grant execute on all functions in schema dp_private to authenticated;

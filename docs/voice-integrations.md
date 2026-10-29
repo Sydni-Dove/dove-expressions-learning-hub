@@ -54,16 +54,33 @@ Finalized prices (owner, October 29) and the proposed entitlement for each. Pric
 | Annual coaching | future only | not configured |
 | 3-lesson and 6-lesson bundles | discontinued | not configured |
 
-**Differences between these prices and the live store (read-only audit on October 29; nothing was changed):**
-60-minute single lesson is $70 (should be $65); monthly 60-minute is $252 (should be $248); 12-week 60-minute is $744 / 3 x $248
-(should be $720 / 3 x $240); the 3-lesson bundle (ID 1707, published) and 6-lesson bundle (ID 1709, private) still exist; private
-annual products (1789, 1790) exist; a 90-minute Vocal Intensive (1794) exists and the Hub only supports 45/60-minute lessons.
-Store product IDs for the entries above: 1705, 1793, 1785, 1786, 1787/1846 (12-week 45), 1788/1847 (12-week 60).
+**What the live store shows today versus the finalized prices above (read-only audit on October 29; nothing in the store was changed).**
+The finalized 12-week 60-minute plan is $720 total, which is **three payments of $240**. The store currently lists it differently:
 
-**Open question for the 12-week "3 payments" products:** the store sells each as a simple product at the per-payment price
-(1846 = $168, 1847 = $248). The Hub grants a package per paid order line, so as the store is configured today a student who pays
-once would receive all twelve lessons. Decide when the lessons unlock (all on the first payment, or tied to payment 1/2/3)
-before enabling the webhook.
+| Item | Store today | Finalized | Action for the store owner |
+|---|---|---|---|
+| 60-min single lesson (1793) | $70 | $65 | change price |
+| Monthly, four 60-min lessons (1786) | $252 | $248 | change price |
+| 12-week 60-min, paid in full (1788) | $744 | $720 | change price |
+| 12-week 60-min, 3 payments (1847) | $248 per payment | $240 per payment | change price |
+| 12-week 45-min, 3 payments (1846) / paid in full (1787) | $168 / $504 | $168 / $504 | matches |
+| 3-lesson bundle (1707, published), 6-lesson bundle (1709, private) | exist | discontinued | unpublish or delete |
+| Annual coaching (1789, 1790, private) | exist | future only | leave private |
+| Vocal Intensive, 90 min (1794) | exists | not in the finalized list | decide; the Hub supports 45/60-minute lessons only |
+
+Any "$248 per payment" for the 12-week 60-minute plan elsewhere in these notes is the store's current (wrong) value, not the target.
+Store product IDs for the finalized packages: 1705, 1793, 1785, 1786, 1787/1846 (12-week 45), 1788/1847 (12-week 60).
+
+### The installment rule (built and tested; confirm the unlock schedule)
+A first installment must never grant the whole package. Each package has a **number of payments**. With more than one, lessons
+unlock **in proportion to payments received**: for 12 lessons over 3 payments, 4 after the first, 8 after the second, all 12 after
+the third. Lessons already taught before a payment arrives are charged to the package once enough are unlocked. A refunded
+installment takes its lessons back out of the unlocked balance. Each paid store order line counts as one payment on the student's
+open package for that product (a replayed order changes nothing; buying quantity 2 of an installment product is refused rather than
+guessed). The student's dashboard says, for example, "Payment 1 of 3 received: 4 of 12 lessons unlocked." Tested end to end through
+the webhook route on the local stack. **Please confirm** that proportional unlocking is what you want, and how the store collects
+the three payments (separate orders per installment is assumed; if the store uses a payment-plan plugin that sends one order,
+tell me and the mapping changes).
 
 ### Payment-first, then booking (needs a WordPress change; not done)
 Because the pages are public iframes, "pay first" is not enforced today. Options, in order of effort: (1) after checkout,
@@ -81,3 +98,13 @@ once the sheet exists).
 ## Policy alignment
 The site's policy page requires 24 hours' notice to reschedule. The command center offers "Cancelled in advance" (no credit
 used) versus "Late cancel" and "Missed" (credit used). Confirm this matches the written policy before relying on it.
+
+
+## Testimonials: consent, publication and withdrawal
+A testimonial is private by default. It is shown publicly only when the student ticked the separate public-use permission, an
+administrator approved it, and an administrator then marked it published. The public page is `/testimonials` (first name only, video
+served through short-lived links, `noindex` until you decide to promote it; it is not linked from the app, so link or embed it from the
+website when you are ready). Students can **withdraw public permission** or **delete** a testimonial from their Voice home: withdrawal
+unpublishes at once, keeps the private record, stops new video links being issued, and cannot be reversed by staff (the student would
+submit again). A video link already opened can keep playing for up to 10 minutes (the link lifetime). The database enforces all of this;
+the browser tests check what a signed-out visitor can and cannot see.

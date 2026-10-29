@@ -29,6 +29,8 @@ create function storage.foldername(name text) returns text[] language sql immuta
 create table public.profiles (id uuid primary key, full_name text, email text, role text);
 alter table public.profiles enable row level security;
 grant usage on schema public, auth, storage to anon, authenticated;
+-- Supabase lets the API roles query storage.objects; row policies decide what they see.
+grant select on storage.objects to anon;
 `;
 
 export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip: ["0025"] }) {

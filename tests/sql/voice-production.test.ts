@@ -144,7 +144,11 @@ describe("schedule, capacity and credits", () => {
     await q(T, `select dp_set_lesson_status('${lessons[2]}','late_cancelled')`);
     expect((await bal()).find((r: any) => r.package_id === id(71)).credits_remaining).toBe(0);
     // Pending/expired/45-minute packages were never drawn on.
-    for (const p of [72, 73, 74]) expect((await bal()).find((r: any) => r.package_id === id(p)).credits_remaining).toBe(p === 74 ? 5 : 5);
+    // Pending packages unlock nothing; an expired paid package keeps its balance but is not usable; other lengths are untouched.
+    const rest = await bal();
+    expect(rest.find((r: any) => r.package_id === id(72)).credits_remaining).toBe(0);
+    expect(rest.find((r: any) => r.package_id === id(73)).credits_remaining).toBe(5);
+    expect(rest.find((r: any) => r.package_id === id(74)).credits_remaining).toBe(5);
     // Correcting a status gives the credit back.
     await q(T, `select dp_set_lesson_status('${lessons[2]}','cancelled')`);
     expect((await bal()).find((r: any) => r.package_id === id(71)).credits_remaining).toBe(1);
@@ -180,6 +184,51 @@ describe("schedule, capacity and credits", () => {
     await expect(call("1003", "paid", "authenticated")).rejects.toThrow();
     await expect(call("1004", "bogus")).rejects.toThrow();
     expect((await q(ADMIN, `select renewed from dp_package_balances where package_id='${first}'`)).rows[0].renewed).toBe(true);
+  });
+  it("never lets a first installment unlock all twelve lessons (12 lessons over 3 payments)", async () => {
+    const T3 = id(92);
+    await q(ADMIN, `insert into dp_coaching_tiers(id,program_id,slug,name,lesson_minutes,lesson_count,installments,woo_product_ids)
+      select '${T3}',id,'twelve-week','12-week',60,12,3,array['2002'] from dp_programs where slug='vocal-coaching'`);
+    const buy = (student: string, order: string, status: string, qty = 1) =>
+      db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${T3}',${qty},'${order}','1','wc-product-2002','${status}') id`)).finally(() => db.exec("reset role"));
+    const snap = async (pid: string) => (await db.query<any>(`select payment_status,installments_paid,installments_total,credits_total,credits_unlocked,credits_remaining,usable from dp_package_balances where package_id='${pid}'`)).rows[0];
+    // nothing unlocks while the first payment is only pending
+    const pid = (await buy(B, "3001", "pending")).rows[0].id;
+    expect(await snap(pid)).toMatchObject({ payment_status: "pending", installments_paid: 0, credits_unlocked: 0, credits_remaining: 0, usable: false });
+    // payment 1 confirmed: 4 of 12
+    expect((await buy(B, "3001", "paid")).rows[0].id).toBe(pid);
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 1, credits_total: 12, credits_unlocked: 4, credits_remaining: 4, usable: true });
+    // the same order replayed changes nothing
+    await buy(B, "3001", "paid");
+    expect((await snap(pid)).installments_paid).toBe(1);
+    // six lessons are taught; only four can be charged to the package
+    for (let i = 0; i < 6; i++) await db.exec(`insert into dp_sessions(student_id,mentor_id,program_id,scheduled_at,lesson_minutes,appointment_status)
+      select '${B}','${T}',id,now()-interval '${i + 1} days',60,'scheduled' from dp_programs where slug='vocal-coaching'`);
+    const ids = (await db.query<any>(`select id from dp_sessions where student_id='${B}' and plan_id is null order by scheduled_at`)).rows.map((r: any) => r.id);
+    for (const sid of ids) await q(T, `select dp_set_lesson_status('${sid}','completed')`);
+    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and package_id='${pid}'`)).rows[0].n).toBe(4);
+    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and plan_id is null and package_id is null and appointment_status='completed'`)).rows[0].n).toBe(2);
+    expect((await snap(pid)).credits_remaining).toBe(0);
+    // payments 2 and 3 unlock 8 then 12
+    await buy(B, "3002", "paid");
+    // the two lessons already taught are now charged to the package
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8, credits_remaining: 2 });
+    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and plan_id is null and package_id is null and appointment_status='completed'`)).rows[0].n).toBe(0);
+    await buy(B, "3003", "paid");
+    expect(await snap(pid)).toMatchObject({ payment_status: "paid", installments_paid: 3, credits_unlocked: 12, credits_remaining: 6 });
+    expect((await db.query<any>(`select count(*)::int n from dp_coaching_packages where student_id='${B}' and tier_id='${T3}'`)).rows[0].n).toBe(1);
+    // a refunded installment takes its lessons back out of the unlocked balance
+    await buy(B, "3003", "refunded");
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8 });
+    // a different student gets their own package; quantity > 1 is refused for installment plans
+    const other = (await buy(D, "3101", "paid")).rows[0].id;
+    expect(other).not.toBe(pid);
+    expect((await snap(other)).credits_unlocked).toBe(4);
+    await expect(buy(D, "3102", "paid", 2)).rejects.toThrow(/one payment at a time/);
+    // the student sees the plan and what is unlocked, never more
+    const o = (await q(D, `select dp_my_coaching_overview('vocal-coaching') o`)).rows[0].o;
+    const pk = o.packages.find((x: any) => x.installments_total === 3);
+    expect(pk).toMatchObject({ credits_total: 12, credits_unlocked: 4, installments_paid: 1, remaining: 4 });
   });
   it("snapshots entitlements so later tier edits do not change purchased packages", async () => {
     await q(ADMIN, `update dp_coaching_tiers set lesson_count=10,resource_level=0,personal_plan=false where id='${TIER}'`);
@@ -389,5 +438,57 @@ describe("student resource area", () => {
     expect((await db.query<any>(`select body from dp_voice_resource_content where key='welcome'`)).rows[0].body).not.toBe("hacked");
     await q(ADMIN, `update dp_voice_resource_content set body='Edited welcome' where key='welcome'`);
     expect((await q(A, `select body from dp_voice_resource_content where key='welcome'`)).rows[0].body).toBe("Edited welcome");
+  });
+});
+
+describe("public testimonial display and consent withdrawal", () => {
+  const E1 = id(121), E2 = id(122), D1 = id(123);
+  const pub = async () => (await q(null, `select id,display_name,review_text,video_path from dp_public_testimonials()`)).rows;
+  const seen = async (path: string) => (await q(null, `select count(*)::int n from storage.objects where bucket_id='voice-testimonials' and name='${path}'`)).rows[0].n;
+  beforeAll(async () => {
+    await db.exec(`update profiles set full_name='Esther Example' where id='${E}'`);
+    await q(E, `insert into dp_voice_testimonials(id,student_id,review_text,video_path,allow_public_use) values ('${E1}','${E}','Public words','${E}/pub.mp4',true)`);
+    await q(E, `insert into dp_voice_testimonials(id,student_id,review_text,allow_public_use) values ('${E2}','${E}','Private words',false)`);
+    await q(D, `insert into dp_voice_testimonials(id,student_id,review_text,allow_public_use) values ('${D1}','${D}','Delete me',true)`);
+    await db.exec(`insert into storage.objects(bucket_id,name,owner) values ('voice-testimonials','${E}/pub.mp4','${E}'),('voice-testimonials','${E}/other.mp4','${E}')`);
+  });
+  it("shows nothing publicly until approved, consented and published", async () => {
+    expect(await pub()).toEqual([]);
+    await q(FAC, `update dp_voice_testimonials set status='approved',reviewed_at=now() where id in ('${E1}','${E2}','${D1}')`);
+    expect(await pub()).toEqual([]);
+    expect(await seen(`${E}/pub.mp4`)).toBe(0);
+  });
+  it("publishes only the consented one, with first name only, and serves its video while published", async () => {
+    await q(FAC, `update dp_voice_testimonials set published_at=now() where id='${E1}'`);
+    await denied(FAC, `update dp_voice_testimonials set published_at=now() where id='${E2}'`);
+    const rows = await pub();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ display_name: "Esther", review_text: "Public words", video_path: `${E}/pub.mp4` });
+    expect(JSON.stringify(rows)).not.toContain("Example");
+    expect(await seen(`${E}/pub.mp4`)).toBe(1);
+    expect(await seen(`${E}/other.mp4`)).toBe(0);
+    await q(FAC, `update dp_voice_testimonials set published_at=null where id='${E1}'`);
+    expect(await pub()).toEqual([]);
+    expect(await seen(`${E}/pub.mp4`)).toBe(0);
+    await q(FAC, `update dp_voice_testimonials set published_at=now() where id='${E1}'`);
+  });
+  it("lets the student withdraw consent: unpublished at once, video no longer served, cannot be republished", async () => {
+    await denied(D, `select dp_withdraw_testimonial_consent('${E1}')`); // not theirs
+    await denied(C, `select dp_withdraw_testimonial_consent('${E1}')`);
+    await q(E, `select dp_withdraw_testimonial_consent('${E1}')`);
+    expect(await pub()).toEqual([]);
+    expect(await seen(`${E}/pub.mp4`)).toBe(0);
+    const row = (await db.query<any>(`select allow_public_use,published_at,consent_withdrawn_at is not null w,status from dp_voice_testimonials where id='${E1}'`)).rows[0];
+    expect(row).toMatchObject({ allow_public_use: false, published_at: null, w: true, status: "approved" });
+    await denied(E, `select dp_withdraw_testimonial_consent('${E1}')`); // already withdrawn
+    await denied(FAC, `update dp_voice_testimonials set published_at=now() where id='${E1}'`);
+    await denied(FAC, `update dp_voice_testimonials set allow_public_use=true,consent_withdrawn_at=null where id='${E1}'`);
+    expect((await q(E, `select count(*)::int n from dp_voice_testimonials where id='${E1}'`)).rows[0].n).toBe(1); // private record kept
+  });
+  it("lets a student delete their own testimonial and nobody else's", async () => {
+    await denied(E, `select dp_delete_my_testimonial('${D1}')`);
+    expect((await q(D, `select dp_delete_my_testimonial('${D1}') p`)).rows[0].p).toBeNull();
+    expect((await db.query<any>(`select count(*)::int n from dp_voice_testimonials where id='${D1}'`)).rows[0].n).toBe(0);
+    await denied(null as any, `select dp_delete_my_testimonial('${E1}')`);
   });
 });

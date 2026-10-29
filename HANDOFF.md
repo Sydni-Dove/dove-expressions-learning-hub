@@ -167,3 +167,17 @@ Owner approval of the implementation and test results; decision on when 12-week 
 migrations to the live project (with a rollback plan); store price corrections and product linking; payment-first enforcement on
 the booking pages; Google Apps Script installation; a smoke pass against the real project; scoped teachers can open the staff Voice
 pages (they see no data) but cannot review course-less weekly-plan homework (only faculty and administrators can).
+
+
+## October 29 late update: review feedback on PR #3 (installments, public reviews, withdrawal)
+- **Installment rule:** packages have a number of payments; lessons unlock in proportion to payments received (12 over 3 = 4, 8, 12);
+  refunds take lessons back; lessons taught early are settled when payments arrive; installment quantity above 1 is refused. Store
+  payments are recorded per order line in `dp_package_payments`. Owner must confirm the unlock schedule and how the store collects the
+  three payments.
+- **Public review display:** `/testimonials` (signed-out visitors), fed by `dp_public_testimonials()`; first name only; video through
+  10-minute signed links permitted by a storage policy that exists only while a testimonial is approved, consented, published and not
+  withdrawn.
+- **Consent withdrawal and deletion in the app:** `dp_withdraw_testimonial_consent`, `dp_delete_my_testimonial`; staff cannot change
+  consent or republish a withdrawn testimonial.
+- **Price wording corrected:** the 12-week 60-minute plan is $720 = 3 x $240; the store's current $248 per payment is a value to change.
+- Browser suite: 51 tests (39 role and flow tests, 12 responsive), all passing on the local stack. Hosted-project smoke test still required.

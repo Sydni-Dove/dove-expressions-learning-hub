@@ -9,7 +9,7 @@ export default async function VoicePackagesPage() {
   const supabase = createClient();
   const { data: program } = await supabase.from("dp_programs").select("id").eq("slug", "vocal-coaching").maybeSingle();
   const [tiers, roster, lessons, access] = await Promise.all([
-    supabase.from("dp_coaching_tiers").select("id,slug,name,description,lesson_minutes,lesson_count,valid_days,resource_level,personal_plan,assessments_included,recording_feedback_included,woo_product_ids,is_active").order("sort_order").order("created_at"),
+    supabase.from("dp_coaching_tiers").select("id,slug,name,description,lesson_minutes,lesson_count,valid_days,installments,resource_level,personal_plan,assessments_included,recording_feedback_included,woo_product_ids,is_active").order("sort_order").order("created_at"),
     supabase.rpc("dp_program_students", { target_program_slug: "vocal-coaching" }),
     supabase.from("dp_lessons").select("id,title,status,order_index,dp_modules!inner(order_index,dp_courses!inner(title,order_index,dp_programs!inner(slug)))").eq("dp_modules.dp_courses.dp_programs.slug", "vocal-coaching"),
     supabase.from("dp_lesson_access").select("lesson_id,min_level")

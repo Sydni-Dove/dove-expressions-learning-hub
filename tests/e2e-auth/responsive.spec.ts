@@ -28,3 +28,15 @@ for (const [name, w, h] of sizes) {
     }
   });
 }
+
+for (const [name, w, h] of sizes) {
+  test(`public testimonials page fits at ${name} (${w}px) for a signed-out visitor`, async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    const page = await ctx.newPage();
+    await page.goto("/testimonials"); await page.waitForLoadState("networkidle");
+    await expect(page.locator("h1")).toHaveText("Student voices");
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: `testing/local-supabase/screenshots/${name}-public-testimonials.png`, fullPage: true });
+    await ctx.close();
+  });
+}
