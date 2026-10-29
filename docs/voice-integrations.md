@@ -71,17 +71,41 @@ The finalized 12-week 60-minute plan is $720 total, which is **three payments of
 Any "$248 per payment" for the 12-week 60-minute plan elsewhere in these notes is the store's current (wrong) value, not the target.
 Store product IDs for the finalized packages: 1705, 1793, 1785, 1786, 1787/1846 (12-week 45), 1788/1847 (12-week 60).
 
-### The installment rule (built and tested; confirm the unlock schedule)
-A first installment must never grant the whole package. Each package has a **number of payments**. With more than one, lessons
-unlock **in proportion to payments received**: for 12 lessons over 3 payments, 4 after the first, 8 after the second, all 12 after
-the third. Lessons already taught before a payment arrives are charged to the package once enough are unlocked. A refunded
-installment takes its lessons back out of the unlocked balance. Each paid store order line counts as one payment on the student's
-open package for that product (a replayed order changes nothing; buying quantity 2 of an installment product is refused rather than
-guessed). The student's dashboard says, for example, "Payment 1 of 3 received: 4 of 12 lessons unlocked." Tested end to end through
-the webhook route on the local stack. **Confirmed by the owner (October 29):** the store collects each installment as its own separate order. That is how the Hub reads it.
-Limit to know: the Hub attaches each paid order for an installment product to that student's earliest plan still waiting for payments,
-so if one student bought two 12-week plans at the same time their payments would be applied in order, not matched to a specific plan.
-Still to confirm: that proportional unlocking (4, 8, 12) is the schedule you want.
+### The installment rule (approved October 29, built and tested)
+A first installment never grants the whole package. With more than one payment, lessons unlock in proportion to payments received:
+12 lessons over 3 payments = **4 after payment 1, 8 after payment 2, all 12 after payment 3** (approved by the owner). A refunded
+installment takes its lessons back out of the unlocked balance. Quantity above 1 on an installment product is refused rather than guessed.
+Finalized prices: 12-week 45-minute **$504 = 3 x $168**; 12-week 60-minute **$720 = 3 x $240**. The store has not been changed.
+
+**Scheduling is separate from payment.** The instructor can schedule appointments across the whole 12-week program at any time ("Schedule
+through 12 weeks"). What payment controls is whether a lesson can be *recorded as taught* (or charged as a late cancellation or missed lesson):
+the database refuses that unless a paid, unlocked lesson covers it. The instructor can waive payment for a specific lesson only by entering a
+reason, which is stored with the lesson. The command center shows, per student, how many scheduled lessons run beyond their paid lessons and
+the date of the first one, so a payment can be chased before that lesson.
+
+**Curriculum access follows payments, content only.** A lesson can be tagged with a package level and/or a number of paid lessons that must be
+unlocked ("Open lessons in order" sets lesson 1 after one paid lesson, lesson 2 after two, and so on). The rule closes the lesson's teaching
+content and files, not the lesson itself. If a refund closes content, the student keeps the lesson title and all records.
+
+**A refund restricts access and deletes nothing.** Completed lessons (with the package they were charged to), assignments, submissions,
+recordings, shared feedback, progress and instructor notes (private notes stay private) are untouched. This is tested.
+
+### Matching installment payments to their own purchase
+Options considered: (1) always give a payment to the earliest unpaid plan (simple, but wrong whenever a student has two plans); (2) require
+the store to send a reference to the first order (exact, needs store configuration); (3) never guess, and queue anything unclear for a person.
+**Implemented: (2) with (3) as the safety net**, plus an opt-in shortcut:
+1. If the order carries a reference, it goes to exactly that purchase. The reference is the order meta `dove_plan_order` (the first
+   order's number) or, if the store creates later installments as child orders, the order's parent order. A reference that does not belong to
+   that student, or whose first order is not recorded yet, is never matched (the store retries the delivery).
+2. No reference and no open plan for that student and package: it starts a new purchase.
+3. No reference and an open plan: the payment waits in **Store payments waiting to be matched** in the command center. You choose "start a new
+   plan" or the exact plan. Nothing is lost and nothing is guessed.
+4. Optional per package: "match payments with no reference to the student's single open plan". Off by default; use it only if the store cannot send a
+   reference. Even then, a student with two open plans always goes to the waiting list.
+
+**Store configuration still needed (not done):** make installments 2 and 3 carry the first order's number in order meta `dove_plan_order`
+(or create them as child orders of the first). How the installment orders are created in WooCommerce was not visible to me, so this has to be
+confirmed against the real store; until then payments without a reference queue for a person to match.
 
 ### Payment-first, then booking (needs a WordPress change; not done)
 Because the pages are public iframes, "pay first" is not enforced today. Options, in order of effort: (1) after checkout,
@@ -101,11 +125,22 @@ The site's policy page requires 24 hours' notice to reschedule. The command cent
 used) versus "Late cancel" and "Missed" (credit used). Confirm this matches the written policy before relying on it.
 
 
-## Testimonials: consent, publication and withdrawal
-A testimonial is private by default. It is shown publicly only when the student ticked the separate public-use permission, an
-administrator approved it, and an administrator then marked it published. The public page is `/testimonials` (first name only, video
-served through short-lived links, `noindex` until you decide to promote it; it is not linked from the app, so link or embed it from the
-website when you are ready). Students can **withdraw public permission** or **delete** a testimonial from their Voice home: withdrawal
-unpublishes at once, keeps the private record, stops new video links being issued, and cannot be reversed by staff (the student would
-submit again). A video link already opened can keep playing for up to 10 minutes (the link lifetime). The database enforces all of this;
-the browser tests check what a signed-out visitor can and cannot see.
+## Testimonials: consent, publication, website display and withdrawal
+A testimonial is private by default. It is shown publicly only when the student ticked the separate public-use permission, an administrator
+approved it, an administrator marked it published, and the student has not withdrawn. Students can withdraw public permission or delete a
+testimonial from their Voice home; withdrawal unpublishes at once, keeps the private record, stops new video links, and staff cannot republish it.
+
+**Public page (unlisted):** `/testimonials` is not linked from the app and tells search engines not to index it. First name only.
+
+**Website display (when you are ready).** Two live sources, both read from the database on every request, never cached, so a withdrawal removes the
+review from the website the next time it loads:
+- *Embed (recommended):* put an iframe on a WordPress page: `<iframe src="https://YOUR-HUB-DOMAIN/testimonials/embed" title="Student voices" width="100%" height="900" style="border:0"></iframe>`.
+  Only doveexpressions.org and www.doveexpressions.org may frame it (set `TESTIMONIAL_EMBED_ORIGINS` to change the list).
+- *JSON feed:* `GET https://YOUR-HUB-DOMAIN/api/testimonials` returns `{ testimonials: [{ id, name, text, videoUrl }] }` with `Cache-Control: no-store`
+  and CORS limited to the same website origins. Fetch it in the browser at page load; do not store it.
+
+**Limits that withdrawal cannot reach (important):** (1) **Never copy a testimonial's text or video into a WordPress post, page, builder template,
+newsletter or social post**: a copy is outside the Hub and cannot be withdrawn automatically. (2) A video link already opened can keep playing for up
+to 10 minutes. (3) If a caching plugin or a CDN caches the *Hub's* responses, withdrawal is delayed by that cache; the Hub sends no-store headers, so
+do not override them. (4) A server-side fetch by WordPress that stores the result would also be a copy. The browser tests check the page, embed and feed
+for a signed-out visitor, including after withdrawal.

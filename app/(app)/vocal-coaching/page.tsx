@@ -105,7 +105,7 @@ export default async function VocalCoachingPage() {
         {credits.installments.map((n, i) => <span key={i}>Payment {n.paid} of {n.total} received: {n.unlocked} of {n.lessons} lessons unlocked. </span>)}
         {credits.low && !credits.pendingPayment && "You have one or no lessons left. "}
         {credits.expiringSoon && credits.soonestExpiry && <>A package expires {credits.soonestExpiry.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })}. </>}
-        <a href={`https://doveexpressions.org/book-${overview?.packages?.[0]?.lesson_minutes === 45 ? 45 : 60}/`} className="font-semibold underline">Renew or add lessons</a>
+        <a href={`https://doveexpressions.org/book-${overview?.packages?.[0]?.lesson_minutes === 45 ? 45 : 60}/`} className="mt-1 flex min-h-[44px] items-center font-semibold underline">Renew or add lessons</a>
       </p>}
 
       <div className="grid gap-5 lg:grid-cols-5">

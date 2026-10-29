@@ -26,14 +26,23 @@ export function paymentStatusFor(orderStatus: string): PurchaseStatus | null {
 
 const orderSchema = z.object({
   id: z.number(),
+  parent_id: z.number().optional(),
+  meta_data: z.array(z.object({ key: z.string(), value: z.unknown() }).passthrough()).optional(),
   status: z.string(),
   billing: z.object({ email: z.string().trim().email() }).passthrough(),
   line_items: z.array(z.object({ id: z.number(), product_id: z.number(), quantity: z.number().int().min(1) }).passthrough())
 }).passthrough();
 
-export type PlannedPurchase = { orderId: string; lineItemId: string; productId: string; email: string; tierId: string; quantity: number; status: PurchaseStatus };
+export type PlannedPurchase = { orderId: string; lineItemId: string; productId: string; email: string; tierId: string; quantity: number; status: PurchaseStatus; planRef: string | null };
 
 /** Turns one WooCommerce order payload into the package rows it should create or update. */
+/** The first payment's order id, if the store sent one: order meta `dove_plan_order`, else the order's parent order. */
+export function planReference(order: { parent_id?: number; meta_data?: { key: string; value?: unknown }[] }): string | null {
+  const meta = order.meta_data?.find(m => m.key === "dove_plan_order" || m.key === "_dove_plan_order")?.value;
+  if ((typeof meta === "string" || typeof meta === "number") && /^\d{1,12}$/.test(String(meta).trim())) return String(meta).trim();
+  return order.parent_id && order.parent_id > 0 ? String(order.parent_id) : null;
+}
+
 export function planPurchases(payload: unknown, tiers: TierRef[]): { purchases: PlannedPurchase[]; ignored: string[] } {
   const order = orderSchema.parse(payload);
   const status = paymentStatusFor(order.status);
@@ -44,7 +53,8 @@ export function planPurchases(payload: unknown, tiers: TierRef[]): { purchases: 
     if (!tier) { ignored.push(`product ${item.product_id}`); continue; }
     purchases.push({
       orderId: String(order.id), lineItemId: String(item.id), productId: String(item.product_id),
-      email: order.billing.email.trim().toLowerCase(), tierId: tier.id, quantity: Math.min(item.quantity, 20), status
+      email: order.billing.email.trim().toLowerCase(), tierId: tier.id, quantity: Math.min(item.quantity, 20), status,
+      planRef: planReference(order)
     });
   }
   return { purchases, ignored };

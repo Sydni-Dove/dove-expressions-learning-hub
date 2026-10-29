@@ -5,6 +5,7 @@ import { getCurrentUserAndRoles, hasAnyRole } from "@/lib/roles";
 import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
 import { orderPublishedLessons, computeLessonNeighbors } from "@/lib/lesson-nav";
 import CourseLocked from "@/components/CourseLocked";
+import LessonLocked from "@/components/LessonLocked";
 import LessonExperience from "@/components/lesson/LessonExperience";
 import LessonReflectionForm from "@/components/LessonReflectionForm";
 import MarkCompleteButton from "@/components/MarkCompleteButton";
@@ -29,6 +30,12 @@ export default async function LessonPage({ params }: { params: { courseId: strin
     .eq("id", params.lessonId)
     .maybeSingle();
   if (!lesson) notFound();
+
+  // Teaching content is closed until the student's payments cover it; the lesson itself, their progress and records stay visible.
+  const { data: lock } = await supabase.rpc("dp_my_lesson_lock", { target_lesson: lesson.id });
+  if (lock?.locked) {
+    return <LessonLocked title={lesson.title} backHref={`/courses/${params.courseId}`} neededLessons={lock.needed_lessons ?? 1} neededLevel={lock.needed_level ?? 0} unlockedNow={lock.unlocked_now ?? 0} />;
+  }
 
   const { data: module_ } = await supabase.from("dp_modules").select("id,course_id,order_index").eq("id", lesson.module_id).maybeSingle();
   if (!module_ || module_.course_id !== params.courseId) notFound();

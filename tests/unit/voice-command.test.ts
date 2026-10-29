@@ -80,3 +80,22 @@ describe("installment plans", () => {
     expect(c.total).toBe(4);
   });
 });
+
+import { fundingGap } from "@/lib/voice-command";
+import { embedOrigins, DEFAULT_EMBED_ORIGINS } from "@/lib/public-testimonials";
+describe("scheduling beyond paid lessons", () => {
+  const lessons = ["2026-11-20", "2026-11-06", "2026-11-13", "2026-11-27"].map(d => ({ scheduled_at: `${d}T16:00:00Z` }));
+  it("flags the first scheduled lesson the paid lessons do not reach, without blocking scheduling", () => {
+    expect(fundingGap(lessons, 2)).toEqual({ scheduled: 4, unfunded: 2, firstUnfunded: "2026-11-20T16:00:00Z" });
+    expect(fundingGap(lessons, 4)).toMatchObject({ unfunded: 0, firstUnfunded: null });
+    expect(fundingGap(lessons, 0).unfunded).toBe(4);
+    expect(fundingGap([], 3).unfunded).toBe(0);
+  });
+});
+describe("website embed origins", () => {
+  it("allows only configured https origins and falls back to the website", () => {
+    expect(embedOrigins(undefined)).toEqual(DEFAULT_EMBED_ORIGINS);
+    expect(embedOrigins("https://a.example, http://insecure.example, javascript:x, https://b.example:8443")).toEqual(["https://a.example", "https://b.example:8443"]);
+    expect(embedOrigins("*")).toEqual(DEFAULT_EMBED_ORIGINS);
+  });
+});

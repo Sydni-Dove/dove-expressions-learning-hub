@@ -110,7 +110,7 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
     await page.reload();
     await expect(page.getByText(/4 × 60 min · 45 days · development plan/)).toBeVisible();
     await page.locator('label:has-text("Student") select').selectOption({ label: F.users.voiceOnly.name });
-    await page.locator('label:has-text("Package") select').selectOption({ label: "Monthly 60 (test)" });
+    await page.locator("label", { hasText: /^Package(?!\s+level)/ }).locator("select").selectOption({ label: "Monthly 60 (test)" });
     await page.getByRole("button", { name: "Record package" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Package recorded" })).toBeVisible();
     await ctx.close();
@@ -126,7 +126,7 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
       await page.getByRole("button", { name: "Save schedule" }).click();
     };
     await fill(F.users.voiceOnly.name);
-    await expect(page.getByRole("status").filter({ hasText: /upcoming lesson/ })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /Schedule saved and \d+ lesson/ })).toBeVisible();
     await page.reload();
     await fill(F.users.multi.name); // same weekly slot
     await expect(page.getByRole("alert").filter({ hasText: "already taken" })).toBeVisible();
@@ -448,6 +448,20 @@ test.describe("8. Public testimonial page and consent withdrawal", () => {
     const src = await item.locator("video").getAttribute("src");
     expect((await page.request.get(src!)).status()).toBe(200);
     await ctx.close();
+    // The website embed and the JSON feed show the same live list and are never cached.
+    const embed = await fetch("http://localhost:3111/testimonials/embed");
+    expect(await embed.text()).toContain(PUBLIC_TEXT);
+    expect(embed.headers.get("content-security-policy")).toMatch(/frame-ancestors 'self' https:\/\/doveexpressions\.org https:\/\/www\.doveexpressions\.org/);
+    expect(embed.headers.get("cache-control")).toMatch(/no-store/);
+    expect((await fetch("http://localhost:3111/testimonials")).headers.get("content-security-policy")).toBe("frame-ancestors 'self'");
+    const feed = await fetch("http://localhost:3111/api/testimonials", { headers: { origin: "https://doveexpressions.org" } });
+    expect(feed.headers.get("access-control-allow-origin")).toBe("https://doveexpressions.org");
+    expect(feed.headers.get("cache-control")).toMatch(/no-store/);
+    const json = await feed.json();
+    expect(json.testimonials.map((t: { text: string }) => t.text)).toContain(PUBLIC_TEXT);
+    expect(JSON.stringify(json)).not.toContain("Vera Voice");
+    const stranger = await fetch("http://localhost:3111/api/testimonials", { headers: { origin: "https://evil.example" } });
+    expect(stranger.headers.get("access-control-allow-origin")).toBeNull();
   });
   test("student withdraws permission in the app and the page and video stop being served", async ({ browser }) => {
     const s = await login(browser, "voiceOnly");
@@ -463,6 +477,9 @@ test.describe("8. Public testimonial page and consent withdrawal", () => {
     const { ctx, page } = await publicVisit(browser);
     await expect(page.locator("body")).not.toContainText(PUBLIC_TEXT);
     await expect(page.getByText("No student stories have been shared yet.")).toBeVisible();
+    // the website embed and the JSON feed drop it at once too
+    expect(await (await fetch("http://localhost:3111/testimonials/embed")).text()).not.toContain(PUBLIC_TEXT);
+    expect((await (await fetch("http://localhost:3111/api/testimonials", { headers: { origin: "https://doveexpressions.org" } })).json()).testimonials).toEqual([]);
     // a new signed link for the video can no longer be obtained by anyone signed out
     const rows = await (await rest("admin", "dp_voice_testimonials?select=video_path,consent_withdrawn_at&consent_withdrawn_at=not.is.null")).json();
     expect(rows).toHaveLength(1);
@@ -497,15 +514,17 @@ test.describe("8. Public testimonial page and consent withdrawal", () => {
   });
 });
 
-test.describe("9. Store payments: installments never over-grant (webhook against the real route)", () => {
+test.describe("9. Store payments: installments are matched to their purchase and never over-grant (real webhook route)", () => {
   const SECRET = "local-test-webhook-secret";
   const post = async (order: object, secret = SECRET) => {
     const body = JSON.stringify(order);
     const sig = createHmac("sha256", secret).update(body).digest("base64");
     return fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", headers: { "content-type": "application/json", "x-wc-webhook-signature": sig }, body });
   };
-  const order = (id: number, status: string, product: number, email = F.users.multi.email, qty = 1) => ({ id, status, billing: { email }, line_items: [{ id: id * 10, product_id: product, quantity: qty }] });
-  const remaining = async () => {
+  const order = (id: number, status: string, product: number, o: { email?: string; qty?: number; parent?: number; meta?: string } = {}) => ({
+    id, status, billing: { email: o.email ?? F.users.multi.email }, parent_id: o.parent ?? 0,
+    meta_data: o.meta ? [{ key: "dove_plan_order", value: o.meta }] : [], line_items: [{ id: id * 10, product_id: product, quantity: o.qty ?? 1 }] });
+  const plan = async () => {
     const o = await (await rest("multi", "rpc/dp_my_coaching_overview", { method: "POST", body: JSON.stringify({ target_program_slug: "vocal-coaching" }) })).json();
     return o.packages.find((p: { installments_total: number }) => p.installments_total === 3);
   };
@@ -520,7 +539,6 @@ test.describe("9. Store payments: installments never over-grant (webhook against
     await expect(page.getByRole("status").filter({ hasText: "Package created" })).toBeVisible();
     await page.reload();
     await expect(page.getByText(/12 × 60 min · no expiry · 3 payments/)).toBeVisible();
-    // one store product cannot sell two active packages
     await page.getByLabel("Name").fill("Duplicate link");
     await page.getByLabel("Store product IDs (comma separated)").fill("9002");
     await page.getByRole("button", { name: "Create package" }).click();
@@ -529,36 +547,89 @@ test.describe("9. Store payments: installments never over-grant (webhook against
   });
   test("rejects unsigned, wrongly signed and unknown-product requests", async () => {
     expect((await post(order(7000, "completed", 9002), "wrong-secret")).status).toBe(401);
-    const unsigned = await fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", body: JSON.stringify(order(7000, "completed", 9002)) });
-    expect(unsigned.status).toBe(401);
+    expect((await fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", body: JSON.stringify(order(7000, "completed", 9002)) })).status).toBe(401);
     const unknown = await post(order(7001, "completed", 424242));
     expect(unknown.status).toBe(200);
     expect((await unknown.json()).recorded).toBe(0);
-    expect(await remaining()).toBeUndefined();
-    expect((await post(order(7002, "completed", 9002, "nobody@fixture.test"))).status).toBe(422);
+    expect(await plan()).toBeUndefined();
+    expect((await post(order(7002, "completed", 9002, { email: "nobody@fixture.test" }))).status).toBe(422);
   });
-  test("payment 1 unlocks 4 of 12, payment 2 unlocks 8, payment 3 unlocks all; replays change nothing", async () => {
+  test("payment 1 unlocks 4 of 12; payment 2 (parent order) unlocks 8; payment 3 (plan reference) unlocks all", async () => {
     expect((await post(order(7100, "on-hold", 9002))).status).toBe(200);
-    expect(await remaining()).toMatchObject({ credits_total: 12, credits_unlocked: 0, remaining: 0, payment_status: "pending" });
+    expect(await plan()).toMatchObject({ credits_total: 12, credits_unlocked: 0, remaining: 0, payment_status: "pending" });
     expect((await post(order(7100, "processing", 9002))).status).toBe(200);
-    expect(await remaining()).toMatchObject({ credits_unlocked: 4, remaining: 4, installments_paid: 1, payment_status: "partial" });
+    expect(await plan()).toMatchObject({ credits_unlocked: 4, remaining: 4, installments_paid: 1, payment_status: "partial" });
     await post(order(7100, "processing", 9002)); // replay
-    expect(await remaining()).toMatchObject({ credits_unlocked: 4, installments_paid: 1 });
-    expect((await post(order(7101, "completed", 9002))).status).toBe(200);
-    expect(await remaining()).toMatchObject({ credits_unlocked: 8, remaining: 8, installments_paid: 2 });
-    expect((await post(order(7102, "completed", 9002))).status).toBe(200);
-    expect(await remaining()).toMatchObject({ credits_unlocked: 12, remaining: 12, installments_paid: 3, payment_status: "paid" });
-    const packs = await (await rest("admin", `dp_coaching_packages?select=id&student_id=eq.${F.ids.multi}`)).json();
-    expect(packs).toHaveLength(1);
+    expect(await plan()).toMatchObject({ credits_unlocked: 4, installments_paid: 1 });
+    expect((await post(order(7101, "completed", 9002, { parent: 7100 }))).status).toBe(200); // installment 2 is a child of the first order
+    expect(await plan()).toMatchObject({ credits_unlocked: 8, remaining: 8, installments_paid: 2 });
+    expect((await post(order(7102, "completed", 9002, { meta: "7100" }))).status).toBe(200); // installment 3 carries the plan reference in order meta
+    expect(await plan()).toMatchObject({ credits_unlocked: 12, remaining: 12, installments_paid: 3, payment_status: "paid" });
+    expect(await (await rest("admin", `dp_coaching_packages?select=id&student_id=eq.${F.ids.multi}`)).json()).toHaveLength(1);
+    const attribution = await (await rest("admin", "dp_package_payments?select=external_order_id,attribution&order=external_order_id")).json();
+    expect(attribution.map((a: { attribution: string }) => a.attribution)).toEqual(["new", "reference", "reference"]);
     expect((await post(order(7102, "refunded", 9002))).status).toBe(200);
-    expect(await remaining()).toMatchObject({ credits_unlocked: 8, installments_paid: 2, payment_status: "partial" });
-    expect((await post(order(7200, "completed", 9002, F.users.multi.email, 2))).status).toBe(500);
+    expect(await plan()).toMatchObject({ credits_unlocked: 8, installments_paid: 2, payment_status: "partial" });
+    expect((await post(order(7200, "completed", 9002, { qty: 2 }))).status).toBe(500);
   });
-  test("the student dashboard says what a partial payment has unlocked", async ({ browser }) => {
-    const { ctx, page } = await login(browser, "multi");
-    await page.goto("/voice");
-    await expect(page.getByRole("note").filter({ hasText: "Payment 2 of 3 received: 8 of 12 lessons unlocked." })).toBeVisible();
-    await expect(page.getByText("Lessons remaining").locator("..").locator("..")).toContainText("8");
+  test("an unreferenced payment is never guessed: it waits, the student is told what is unlocked, the instructor matches it", async ({ browser }) => {
+    // payment 3 was refunded above, so the plan is open (2 of 3). A payment with no reference could be installment 3 or a new purchase.
+    const waiting = await post(order(7300, "completed", 9002));
+    expect(waiting.status).toBe(202);
+    expect((await waiting.json()).waitingForMatch).toBe(1);
+    expect(await plan()).toMatchObject({ credits_unlocked: 8, installments_paid: 2 }); // untouched
+    const student = await login(browser, "multi");
+    await student.page.goto("/voice");
+    await expect(student.page.getByRole("note").filter({ hasText: "Payment 2 of 3 received: 8 of 12 lessons unlocked." })).toBeVisible();
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice");
+    const panel = page.locator("section", { hasText: "Store payments waiting to be matched" });
+    await expect(panel).toContainText("store order #7300");
+    await panel.getByLabel(/Match order 7300 to/).selectOption({ index: 2 }); // the student's open plan
+    await panel.getByRole("button", { name: "Match payment" }).click();
+    await expect(panel.getByText("Every store payment has been matched to a purchase.")).toBeVisible({ timeout: 15000 });
+    await ctx.close();
+    expect(await plan()).toMatchObject({ credits_unlocked: 12, installments_paid: 3, payment_status: "paid" });
+    expect(await (await rest("admin", `dp_coaching_packages?select=id&student_id=eq.${F.ids.multi}`)).json()).toHaveLength(1);
+    await student.page.goto("/voice");
+    await expect(student.page.getByRole("note").filter({ hasText: /Payment \d of 3 received/ })).toHaveCount(0);
+    await student.ctx.close();
+  });
+});
+
+test.describe("10. Scheduling the whole program is separate from payment", () => {
+  test("lessons can be scheduled for 12 weeks; a lesson beyond paid lessons cannot be recorded as taught without a waiver reason", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice");
+    await page.getByRole("button", { name: "Schedule through 12 weeks" }).first().click();
+    await expect(page.getByRole("status").filter({ hasText: /new lesson/ }).first()).toBeVisible();
+    const lessons = await (await rest("admin", `dp_sessions?select=id,scheduled_at&student_id=eq.${F.ids.voiceOnly}&appointment_status=eq.scheduled&order=scheduled_at`)).json();
+    expect(lessons.length).toBeGreaterThanOrEqual(11);
+    // Vera has 4 paid lessons from the package recorded earlier: the first four can be recorded, the fifth cannot.
+    for (const l of lessons.slice(0, 4)) {
+      const r = await rest("admin", "rpc/dp_set_lesson_status", { method: "POST", body: JSON.stringify({ target_id: l.id, next_status: "completed" }) });
+      expect(r.status, "paid lesson").toBeLessThan(300);
+    }
+    const fifth = lessons[4].id;
+    const blocked = await rest("admin", "rpc/dp_set_lesson_status", { method: "POST", body: JSON.stringify({ target_id: fifth, next_status: "completed" }) });
+    expect(blocked.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(await blocked.json())).toContain("No paid lesson is available");
+    const direct = await rest("admin", `dp_sessions?id=eq.${fifth}`, { method: "PATCH", body: JSON.stringify({ appointment_status: "completed" }) });
+    expect(direct.status).toBeGreaterThanOrEqual(400);
+    // The command center warns about it and offers the waiver path.
+    await page.reload();
+    await expect(page.getByText(/scheduled beyond paid lessons/).first()).toBeVisible();
+    await rest("admin", `dp_sessions?id=eq.${fifth}`, { method: "PATCH", body: JSON.stringify({ scheduled_at: new Date(Date.now() - 86400000).toISOString() }) });
+    await page.reload();
+    const box = page.locator("div", { hasText: /Record the outcome for \d+ past lesson/ }).first();
+    await box.getByRole("button", { name: "Completed", exact: true }).first().click();
+    await expect(box.getByRole("alert").first()).toContainText("no paid, unlocked lesson");
+    await expect(box.getByRole("button", { name: "Waive payment and record" }).first()).toBeDisabled();
+    await box.getByLabel("Reason for waiving payment").first().fill("Complimentary make-up lesson");
+    await box.getByRole("button", { name: "Waive payment and record" }).first().click();
+    // the lesson leaves the "needs an outcome" list once recorded, so confirm from the record itself
+    await expect.poll(async () => (await (await rest("admin", `dp_sessions?select=credit_waived,waive_reason,package_id,appointment_status&id=eq.${fifth}`)).json())[0],
+      { timeout: 15000 }).toMatchObject({ credit_waived: true, waive_reason: "Complimentary make-up lesson", package_id: null, appointment_status: "completed" });
     await ctx.close();
   });
 });

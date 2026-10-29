@@ -45,8 +45,13 @@ node testing/local-supabase/run.mjs down    # delete the stack
 7. Testimonials: consent captured, approval required, publish gate enforced by the database.
 8. Public testimonial page as a signed-out visitor (consented, approved, published only; first name only; video plays), consent
    withdrawal in the app (page and video stop being served; staff cannot republish), deletion.
-9. Store payments through the real webhook route: bad signatures, unknown products and unmatched emails rejected; a 12-lesson,
+9. Store payments through the real webhook route (installments matched by parent order or plan reference; a payment with no reference waits
+   in a queue and the instructor matches it; refunds; replays): bad signatures, unknown products and unmatched emails rejected; a 12-lesson,
    3-payment package unlocks 4, 8, then 12 lessons; replays and refunds behave; quantity 2 refused; the dashboard says what is unlocked.
+10. Scheduling versus payment: a 12-week schedule can be created; recording a lesson beyond paid lessons is refused (function and direct update)
+    until the instructor waives payment with a reason; the command center shows lessons scheduled beyond paid lessons.
+    (Content gating, refund record preservation and attribution edge cases are covered by the database tests.)
+8b. Website embed and JSON feed: same live list, never cached, framing and CORS limited to the website, empty after withdrawal.
 Responsive: phone 390, tablet 820, desktop 1440 for student, instructor, admin and the public testimonial page (no horizontal overflow, controls at
 least 24 px, screenshots saved to `screenshots/`).
 

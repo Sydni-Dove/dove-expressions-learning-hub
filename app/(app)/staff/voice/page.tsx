@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/roles";
 import { Pill, EmptyState } from "@/components/ui";
 import LocalTime from "@/components/LocalTime";
-import { LessonStatusButtons, PlanForm, GenerateButton, ConsultationStatus, MarkReminderSent } from "@/components/voice/CommandForms";
-import { CAPACITY, capacitySummary, renewalAttention, consultationState, slotLabel, type Plan, type Balance } from "@/lib/voice-command";
+import { LessonStatusButtons, PlanForm, GenerateButton, ConsultationStatus, MarkReminderSent, UnmatchedPayments } from "@/components/voice/CommandForms";
+import { CAPACITY, capacitySummary, renewalAttention, consultationState, slotLabel, fundingGap, type Plan, type Balance } from "@/lib/voice-command";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +31,16 @@ export default async function VoiceCommandCenter() {
   const assignmentIds = (assignments ?? []).map(a => a.id);
   const titleOf = (id: string) => assignments?.find(a => a.id === id)?.title ?? "Assignment";
 
-  const [plansRes, balancesRes, lessonsRes, subsRes, attemptsRes, inquiriesRes, testimonialsRes] = await Promise.all([
+  const [plansRes, balancesRes, lessonsRes, subsRes, attemptsRes, inquiriesRes, testimonialsRes, waitingRes] = await Promise.all([
     supabase.from("dp_coaching_plans").select("id,student_id,cadence,lesson_minutes,weekday,lesson_time,week_parity,timezone,status").eq("status", "active"),
-    supabase.from("dp_package_balances").select("package_id,student_id,credits_total,credits_remaining,payment_status,expires_at,usable,renewed,lesson_minutes"),
+    supabase.from("dp_package_balances").select("package_id,student_id,tier_id,installments_paid,installments_total,purchased_at,credits_total,credits_remaining,payment_status,expires_at,usable,renewed,lesson_minutes"),
     programId ? supabase.from("dp_sessions").select("id,student_id,scheduled_at,lesson_minutes,appointment_status").eq("program_id", programId).eq("appointment_status", "scheduled")
-      .lte("scheduled_at", new Date(now.getTime() + 14 * 86400000).toISOString()).order("scheduled_at") : Promise.resolve({ data: [], error: null }),
+      .lte("scheduled_at", new Date(now.getTime() + 120 * 86400000).toISOString()).order("scheduled_at") : Promise.resolve({ data: [], error: null }),
     assignmentIds.length ? supabase.from("dp_submissions").select("id,student_id,assignment_id,status,submitted_at").in("assignment_id", assignmentIds) : Promise.resolve({ data: [], error: null }),
     assignmentIds.length ? supabase.from("dp_submission_attempts").select("id,submission_id,student_id,assignment_id,attempt_no,file_urls,submitted_at").in("assignment_id", assignmentIds).order("submitted_at", { ascending: false }).limit(60) : Promise.resolve({ data: [], error: null }),
     supabase.from("dp_consultation_inquiries").select("id,full_name,email,interest,status,submitted_at,reminder_sent_at,booked_at").not("status", "in", "(enrolled,closed)").order("submitted_at"),
-    supabase.from("dp_voice_testimonials").select("id", { count: "exact", head: true }).eq("status", "pending")
+    supabase.from("dp_voice_testimonials").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("dp_unmatched_payments").select("id,student_id,tier_id,external_order_id,status,reason,received_at").is("resolved_at", null).order("received_at")
   ]);
   const plans = (plansRes.data ?? []) as Plan[];
   const balances = (balancesRes.data ?? []) as Balance[];
@@ -51,9 +52,11 @@ export default async function VoiceCommandCenter() {
   const renewals = renewalAttention(balances, now);
   const awaiting = submissions.filter(s => ["submitted", "revised"].includes(s.status)).sort((a, b) => +new Date(a.submitted_at) - +new Date(b.submitted_at));
   const outcomesNeeded = lessons.filter(l => new Date(l.scheduled_at as string) < now);
-  const upcoming = lessons.filter(l => new Date(l.scheduled_at as string) >= now);
+  const upcoming = lessons.filter(l => new Date(l.scheduled_at as string) >= now && new Date(l.scheduled_at as string) <= new Date(now.getTime() + 14 * 86400000));
+  const future = lessons.filter(l => new Date(l.scheduled_at as string) >= now);
+  const waiting = (waitingRes.data ?? []) as never[];
   const inquiries = (inquiriesRes.data ?? []).map(i => ({ ...i, state: consultationState(i, now) }));
-  const loadErrors = [rosterRes.error, plansRes.error, balancesRes.error, lessonsRes.error, subsRes.error].filter(Boolean);
+  const loadErrors = [rosterRes.error, plansRes.error, balancesRes.error, lessonsRes.error, subsRes.error, waitingRes.error].filter(Boolean);
   const creditsFor = (id: string) => balances.filter(b => b.student_id === id && b.usable).reduce((n, b) => n + b.credits_remaining, 0);
   const nextExpiry = (id: string) => balances.filter(b => b.student_id === id && b.usable && b.expires_at && b.credits_remaining > 0).map(b => b.expires_at!).sort()[0];
 
@@ -92,7 +95,8 @@ export default async function VoiceCommandCenter() {
           const mine = submissions.filter(x => x.student_id === s.id); const exp = nextExpiry(s.id);
           return <tr key={s.id} className="align-top"><td className="py-3 pr-3"><Link href={`/staff/students/${s.id}`} className="inline-flex min-h-[44px] items-center font-semibold text-burgundy hover:underline">{s.full_name || s.email}</Link></td>
             <td className="pr-3">{plan ? <>{slotLabel(plan)}<br /><GenerateButton planId={plan.id} /></> : <span className="text-charcoal/50">Not scheduled</span>}</td>
-            <td className="pr-3">{creditsFor(s.id)}{exp && <span className="block text-xs text-charcoal/60">expires {new Date(exp).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</span>}</td>
+            <td className="pr-3">{creditsFor(s.id)}{exp && <span className="block text-xs text-charcoal/60">expires {new Date(exp).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</span>}
+              {(() => { const g = fundingGap(future.filter(l => l.student_id === s.id), creditsFor(s.id)); return g.unfunded > 0 ? <span className="mt-1 block text-xs font-semibold text-[#7a2c1c]">{g.unfunded} scheduled beyond paid lessons, first on <LocalTime iso={g.firstUnfunded as string} options={{ month: "short", day: "numeric" }} />. Payment needed before it can be recorded as taught.</span> : null; })()}</td>
             <td className="pr-3">{mine.filter(x => ["approved", "exempt"].includes(x.status)).length} / {mine.filter(x => ["submitted", "revised"].includes(x.status)).length}</td>
             <td className="pr-3">{next ? <LocalTime iso={next.scheduled_at as string} options={{ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }} /> : "—"}</td>
             <td>{renewals.find(r => r.student_id === s.id) && <Pill tone="sunrise">Renewal</Pill>}</td></tr>; })}</tbody></table>
@@ -106,6 +110,8 @@ export default async function VoiceCommandCenter() {
         {inquiries.length ? <ul className="mt-3 divide-y divide-charcoal/10">{inquiries.map(i => <li key={i.id} className="py-3"><p className="font-body text-sm"><span className="font-semibold">{i.full_name}</span> · {i.email}</p><p className="font-ui text-xs text-charcoal/60">{i.interest ? `${i.interest} · ` : ""}waiting {i.state.hoursWaiting}h · {i.state.label}</p><div className="mt-1 flex flex-wrap items-center gap-3"><ConsultationStatus id={i.id} status={i.status} />{i.state.reminderDue && <MarkReminderSent id={i.id} />}</div></li>)}</ul>
           : <p className="mt-3 font-body text-sm text-charcoal/70">No open consultation inquiries. Inquiries from the consultation form appear here once the form connection is enabled (see docs/voice-integrations.md). Visible to faculty and administrators only.</p>}</section>
     </div>
+
+    <section className="card p-5" aria-labelledby="unm-h"><h2 id="unm-h" className="font-display text-xl text-burgundy">Store payments waiting to be matched{waiting.length ? ` (${waiting.length})` : ""}</h2><div className="mt-3"><UnmatchedPayments waiting={waiting} plans={balances as never} nameOf={Object.fromEntries(students.map(x => [x.id, x.full_name || x.email || "Student"]))} /></div></section>
 
     <section className="card p-5" aria-labelledby="rec-h"><h2 id="rec-h" className="font-display text-xl text-burgundy">Recent student recordings</h2>
       {recordings.length ? <ul className="mt-3 divide-y divide-charcoal/10">{recordings.map(r => <li key={r.id}><Link href={`/staff/submissions/${r.submission_id}`} className="flex items-center justify-between py-2 hover:bg-pale-pink/30"><span className="font-body text-sm">{nameOf(r.student_id)} · {titleOf(r.assignment_id)}</span><span className="font-ui text-xs text-charcoal/60">attempt {r.attempt_no} · {new Date(r.submitted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</span></Link></li>)}</ul>

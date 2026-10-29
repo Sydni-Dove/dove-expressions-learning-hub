@@ -33,18 +33,21 @@ export async function POST(request: Request) {
   catch { return NextResponse.json({ error: "Unrecognized order payload" }, { status: 422 }); }
   if (!plan.purchases.length) return NextResponse.json({ ok: true, recorded: 0, ignored: plan.ignored });
 
-  const recorded: string[] = []; const unmatched: string[] = [];
+  const recorded: string[] = []; const unmatched: string[] = []; const waiting: string[] = [];
   for (const p of plan.purchases) {
     const { data: student } = await admin.from("profiles").select("id").ilike("email", p.email).maybeSingle();
     if (!student) { unmatched.push(p.email); continue; }
-    const { error } = await admin.rpc("dp_record_package_purchase", {
+    const { data: pkg, error } = await admin.rpc("dp_record_package_purchase", {
       student: student.id, tier: p.tierId, quantity: p.quantity,
-      order_id: p.orderId, line_item_id: p.lineItemId, sku: `wc-product-${p.productId}`, pay_status: p.status
+      order_id: p.orderId, line_item_id: p.lineItemId, sku: `wc-product-${p.productId}`, pay_status: p.status, plan_ref: p.planRef
     });
+    // An error (for example a payment that references a first order not recorded yet) makes the store retry the delivery later.
     if (error) return NextResponse.json({ error: "Could not record purchase" }, { status: 500 });
+    // No package id means the payment is waiting for a person to match it (the app shows it); it is not lost.
+    if (!pkg) { waiting.push(p.lineItemId); continue; }
     recorded.push(p.lineItemId);
   }
   // 422 makes WooCommerce show a failed delivery and retry, so a purchase made before the student created an account is not lost.
   if (unmatched.length) return NextResponse.json({ error: "No Learning Hub account for purchaser email", recorded: recorded.length }, { status: 422 });
-  return NextResponse.json({ ok: true, recorded: recorded.length, ignored: plan.ignored });
+  return NextResponse.json({ ok: true, recorded: recorded.length, waitingForMatch: waiting.length, ignored: plan.ignored }, { status: waiting.length ? 202 : 200 });
 }

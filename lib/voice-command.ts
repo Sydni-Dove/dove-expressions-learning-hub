@@ -2,7 +2,7 @@
 export const CAPACITY = { weekly: 18, biweekly: 12, biweeklyPositions: 6 } as const;
 
 export type Plan = { id: string; student_id: string; cadence: "weekly" | "biweekly"; lesson_minutes: number; weekday: number; lesson_time: string; week_parity: number; timezone: string; status: string };
-export type Balance = { installments_total?: number; installments_paid?: number; package_id: string; student_id: string; credits_total: number; credits_remaining: number; payment_status: string; expires_at: string | null; usable: boolean; renewed: boolean; lesson_minutes: number };
+export type Balance = { tier_id?: string | null; installments_total?: number; installments_paid?: number; package_id: string; student_id: string; credits_total: number; credits_remaining: number; payment_status: string; expires_at: string | null; usable: boolean; renewed: boolean; lesson_minutes: number };
 export type Inquiry = { id: string; status: string; submitted_at: string; reminder_sent_at: string | null; booked_at: string | null };
 
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -55,4 +55,11 @@ export function consultationState(i: Inquiry, now = new Date()) {
   const hours = (now.getTime() - new Date(i.submitted_at).getTime()) / 3600000;
   const reminderDue = !closed && !i.reminder_sent_at && hours >= REMINDER_AFTER_HOURS;
   return { open: !closed, reminderDue, label: closed ? (i.status === "booked" || i.booked_at ? "Booked" : i.status) : reminderDue ? "Reminder due" : "Awaiting booking", hoursWaiting: Math.floor(hours) };
+}
+
+/** Lessons scheduled further ahead than the student's paid, unlocked lessons reach. Scheduling is never blocked; recording them as taught is. */
+export function fundingGap(upcoming: { scheduled_at: string }[], remaining: number) {
+  const sorted = [...upcoming].sort((a, b) => +new Date(a.scheduled_at) - +new Date(b.scheduled_at));
+  const beyond = sorted.slice(Math.max(remaining, 0));
+  return { scheduled: sorted.length, unfunded: beyond.length, firstUnfunded: beyond[0]?.scheduled_at ?? null };
 }

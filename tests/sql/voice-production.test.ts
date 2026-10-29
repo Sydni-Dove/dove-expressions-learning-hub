@@ -189,8 +189,8 @@ describe("schedule, capacity and credits", () => {
     const T3 = id(92);
     await q(ADMIN, `insert into dp_coaching_tiers(id,program_id,slug,name,lesson_minutes,lesson_count,installments,woo_product_ids)
       select '${T3}',id,'twelve-week','12-week',60,12,3,array['2002'] from dp_programs where slug='vocal-coaching'`);
-    const buy = (student: string, order: string, status: string, qty = 1) =>
-      db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${T3}',${qty},'${order}','1','wc-product-2002','${status}') id`)).finally(() => db.exec("reset role"));
+    const buy = (student: string, order: string, status: string, qty = 1, ref: string | null = null) =>
+      db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${T3}',${qty},'${order}','1','wc-product-2002','${status}',${ref ? `'${ref}'` : "null"}) id`)).finally(() => db.exec("reset role"));
     const snap = async (pid: string) => (await db.query<any>(`select payment_status,installments_paid,installments_total,credits_total,credits_unlocked,credits_remaining,usable from dp_package_balances where package_id='${pid}'`)).rows[0];
     // nothing unlocks while the first payment is only pending
     const pid = (await buy(B, "3001", "pending")).rows[0].id;
@@ -201,25 +201,38 @@ describe("schedule, capacity and credits", () => {
     // the same order replayed changes nothing
     await buy(B, "3001", "paid");
     expect((await snap(pid)).installments_paid).toBe(1);
-    // six lessons are taught; only four can be charged to the package
+    // The whole program can be scheduled, but a lesson cannot be recorded as taught without a paid, unlocked lesson.
     for (let i = 0; i < 6; i++) await db.exec(`insert into dp_sessions(student_id,mentor_id,program_id,scheduled_at,lesson_minutes,appointment_status)
-      select '${B}','${T}',id,now()-interval '${i + 1} days',60,'scheduled' from dp_programs where slug='vocal-coaching'`);
+      select '${B}','${T}',id,now()-interval '${6 - i} days',60,'scheduled' from dp_programs where slug='vocal-coaching'`);
     const ids = (await db.query<any>(`select id from dp_sessions where student_id='${B}' and plan_id is null order by scheduled_at`)).rows.map((r: any) => r.id);
-    for (const sid of ids) await q(T, `select dp_set_lesson_status('${sid}','completed')`);
+    expect(ids).toHaveLength(6);
+    for (const sid of ids.slice(0, 4)) await q(T, `select dp_set_lesson_status('${sid}','completed')`);
     expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and package_id='${pid}'`)).rows[0].n).toBe(4);
-    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and plan_id is null and package_id is null and appointment_status='completed'`)).rows[0].n).toBe(2);
     expect((await snap(pid)).credits_remaining).toBe(0);
-    // payments 2 and 3 unlock 8 then 12
-    await buy(B, "3002", "paid");
-    // the two lessons already taught are now charged to the package
-    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8, credits_remaining: 2 });
-    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and plan_id is null and package_id is null and appointment_status='completed'`)).rows[0].n).toBe(0);
-    await buy(B, "3003", "paid");
-    expect(await snap(pid)).toMatchObject({ payment_status: "paid", installments_paid: 3, credits_unlocked: 12, credits_remaining: 6 });
+    // fifth lesson: blocked three ways (function, direct update, empty waiver reason), allowed only with a recorded waiver
+    await expect(q(T, `select dp_set_lesson_status('${ids[4]}','completed')`)).rejects.toThrow(/No paid lesson is available/);
+    await expect(q(T, `update dp_sessions set appointment_status='completed' where id='${ids[4]}'`)).rejects.toThrow(/No paid lesson is available/);
+    await expect(q(T, `select dp_set_lesson_status('${ids[4]}','completed','   ')`)).rejects.toThrow(/No paid lesson is available/);
+    await expect(q(T, `select dp_set_lesson_status('${ids[4]}','no_show')`)).rejects.toThrow(/No paid lesson is available/);
+    await q(T, `select dp_set_lesson_status('${ids[5]}','completed','Complimentary make-up lesson')`);
+    expect((await db.query<any>(`select package_id,credit_waived,waive_reason from dp_sessions where id='${ids[5]}'`)).rows[0]).toMatchObject({ package_id: null, credit_waived: true, waive_reason: "Complimentary make-up lesson" });
+    await q(T, `select dp_set_lesson_status('${ids[5]}','cancelled')`); // undoing a lesson clears the waiver
+    expect((await db.query<any>(`select credit_waived,waive_reason from dp_sessions where id='${ids[5]}'`)).rows[0]).toMatchObject({ credit_waived: false, waive_reason: null });
+    // payment 2 unlocks 8: the fifth lesson can now be recorded normally
+    await buy(B, "3002", "paid", 1, "3001");
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8, credits_remaining: 4 });
+    await q(T, `select dp_set_lesson_status('${ids[4]}','completed')`);
+    expect((await snap(pid)).credits_remaining).toBe(3);
+    await buy(B, "3003", "paid", 1, "3001");
+    expect(await snap(pid)).toMatchObject({ payment_status: "paid", installments_paid: 3, credits_unlocked: 12, credits_remaining: 7 });
     expect((await db.query<any>(`select count(*)::int n from dp_coaching_packages where student_id='${B}' and tier_id='${T3}'`)).rows[0].n).toBe(1);
-    // a refunded installment takes its lessons back out of the unlocked balance
+    // a refunded installment takes its lessons back out of the unlocked balance but never deletes what was taught
     await buy(B, "3003", "refunded");
-    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8 });
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 2, credits_unlocked: 8, credits_remaining: 3 });
+    await buy(B, "3002", "refunded");
+    expect(await snap(pid)).toMatchObject({ payment_status: "partial", installments_paid: 1, credits_unlocked: 4, credits_remaining: 0 });
+    expect((await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and appointment_status='completed' and package_id='${pid}'`)).rows[0].n).toBe(5);
+    await buy(B, "3002", "paid"); await buy(B, "3003", "paid"); // restore for the tests that follow
     // a different student gets their own package; quantity > 1 is refused for installment plans
     const other = (await buy(D, "3101", "paid")).rows[0].id;
     expect(other).not.toBe(pid);
@@ -256,40 +269,162 @@ describe("schedule, capacity and credits", () => {
   });
 });
 
-describe("level-gated reusable library", () => {
-  const gated = id(81), open = id(82);
+describe("level-gated reusable library (content only)", () => {
+  const gated = id(81), open = id(82), counted = id(83); // `counted` opens after six paid lessons
   beforeAll(async () => {
-    await db.exec(`insert into dp_lessons(id,module_id,title,status) values ('${gated}','${MODULE}','Advanced resonance','published'),('${open}','${MODULE}','Open lesson','published')`);
+    await db.exec(`insert into dp_lessons(id,module_id,title,status) values ('${gated}','${MODULE}','Advanced resonance','published'),('${open}','${MODULE}','Open lesson','published'),('${counted}','${MODULE}','Lesson six','published');
+      insert into dp_lesson_blocks(lesson_id,block_type,order_index,content) values
+        ('${gated}','teaching_section',1,'{"heading":"Gated teaching"}'),('${open}','teaching_section',1,'{"heading":"Open teaching"}'),('${counted}','teaching_section',1,'{"heading":"Lesson six teaching"}')`);
   });
-  const visible = async (u: string, lesson: string) => (await q(u, `select count(*)::int n from dp_lessons where id='${lesson}'`)).rows[0].n;
+  const blocks = async (u: string, lesson: string) => (await q(u, `select count(*)::int n from dp_lesson_blocks where lesson_id='${lesson}'`)).rows[0].n;
+  const row = async (u: string, lesson: string) => (await q(u, `select count(*)::int n from dp_lessons where id='${lesson}'`)).rows[0].n;
   it("keeps untagged lessons open to every enrolled student (no behaviour change)", async () => {
-    for (const u of [A, B, D, E]) expect(await visible(u, open)).toBe(1);
-    expect(await visible(C, open)).toBe(0); // not enrolled
+    for (const u of [A, B, D, E]) { expect(await blocks(u, open)).toBe(1); expect(await row(u, open)).toBe(1); }
+    expect(await blocks(C, open)).toBe(0); // not enrolled
   });
-  it("hides a tagged lesson until the student's package level reaches it", async () => {
+  it("closes a tagged lesson's teaching content, not the lesson itself, until the package level reaches it", async () => {
     await denied(A, `insert into dp_lesson_access(lesson_id,min_level) values ('${gated}',1)`);
     await q(T, `insert into dp_lesson_access(lesson_id,min_level) values ('${gated}',2)`);
-    expect(await visible(A, gated)).toBe(0);  // no package
-    expect(await visible(B, gated)).toBe(0);
-    expect(await visible(D, gated)).toBe(1);  // Guided package, level 2, paid
-    expect(await visible(T, gated)).toBe(1);  // instructor
-    expect(await visible(ADMIN, gated)).toBe(1);
-    expect(await visible(C, gated)).toBe(0);
+    expect(await blocks(A, gated)).toBe(0);  // no package
+    expect(await blocks(B, gated)).toBe(0);  // installment package has level 0
+    expect(await blocks(D, gated)).toBe(1);  // Guided package, level 2, paid
+    expect(await blocks(T, gated)).toBe(1);  // instructor
+    expect(await blocks(ADMIN, gated)).toBe(1);
+    expect(await blocks(C, gated)).toBe(0);
+    expect(await row(A, gated)).toBe(1);     // the lesson title stays visible so progress and assignments keep making sense
+    const lock = (await q(A, `select dp_my_lesson_lock('${gated}') l`)).rows[0].l;
+    expect(lock).toMatchObject({ locked: true, needed_level: 2 });
+    expect((await q(D, `select dp_my_lesson_lock('${gated}') l`)).rows[0].l).toEqual({ locked: false });
+    expect((await q(A, `select dp_my_lesson_lock('${open}') l`)).rows[0].l).toEqual({ locked: false });
   });
-  it("stops granting access when the package is refunded or expired", async () => {
+  it("stops granting content when the package is refunded or expired", async () => {
     await db.exec(`update dp_coaching_packages set payment_status='refunded' where student_id='${D}' and tier_id='${TIER}'`);
-    expect(await visible(D, gated)).toBe(0);
+    expect(await blocks(D, gated)).toBe(0);
     await db.exec(`update dp_coaching_packages set payment_status='paid',expires_at=now()-interval '1 day' where student_id='${D}' and tier_id='${TIER}'`);
-    expect(await visible(D, gated)).toBe(0);
+    expect(await blocks(D, gated)).toBe(0);
     await db.exec(`update dp_coaching_packages set expires_at=null where student_id='${D}' and tier_id='${TIER}'`);
-    expect(await visible(D, gated)).toBe(1);
+    expect(await blocks(D, gated)).toBe(1);
+  });
+  it("opens lessons in proportion to payments: lesson six needs six paid lessons (12 over 3 payments)", async () => {
+    await q(T, `insert into dp_lesson_access(lesson_id,min_unlocked_lessons) values ('${counted}',6)`);
+    const buy = (student: string, order: string, status: string, ref: string | null = null) =>
+      db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${id(92)}',1,'${order}','1','wc-product-2002','${status}',${ref ? `'${ref}'` : "null"}) id`)).finally(() => db.exec("reset role"));
+    // B has paid all three installments (12 unlocked): open. A's best package unlocks 5: closed.
+    expect(await blocks(B, counted)).toBe(1);
+    expect(await blocks(A, counted)).toBe(0);
+    await buy(A, "3201", "paid");              // A's first installment: 4 unlocked (A's other package unlocks 5) -> still closed
+    expect(await blocks(A, counted)).toBe(0);
+    await buy(A, "3202", "paid", "3201");      // second installment: 8 unlocked -> opens
+    expect(await blocks(A, counted)).toBe(1);
+    await buy(A, "3202", "refunded");          // refunded: closes again
+    expect(await blocks(A, counted)).toBe(0);
+    expect((await q(A, `select dp_my_lesson_lock('${counted}') l`)).rows[0].l).toMatchObject({ locked: true, needed_lessons: 6, unlocked_now: 5 });
+    expect(await row(A, counted)).toBe(1);     // the lesson title and any records stay visible
   });
   it("does not let a student read the access table or lower a level", async () => {
     expect((await q(D, `select count(*)::int n from dp_lesson_access`)).rows[0].n).toBe(0);
     await q(D, `delete from dp_lesson_access where lesson_id='${gated}'`);
-    expect((await db.query<any>(`select count(*)::int n from dp_lesson_access`)).rows[0].n).toBe(1);
-    await q(T, `delete from dp_lesson_access where lesson_id='${gated}'`);
-    expect(await visible(A, gated)).toBe(1);
+    expect((await db.query<any>(`select count(*)::int n from dp_lesson_access`)).rows[0].n).toBe(2);
+    await q(T, `delete from dp_lesson_access where lesson_id in ('${gated}','${counted}')`);
+    expect(await blocks(A, gated)).toBe(1);
+  });
+});
+
+describe("a refund restricts access but never deletes the student's records", () => {
+  it("keeps completed lessons, assignments, submissions, feedback, progress and instructor notes", async () => {
+    const SUB = id(131);
+    await q(B, `insert into dp_submissions(id,assignment_id,student_id,content) values ('${SUB}','${ASSIGN_B}','${B}','{"response":"My practice"}')`);
+    await q(T, `insert into dp_feedback(submission_id,author_id,content,is_private) values ('${SUB}','${T}','Instructor private observation',true)`);
+    await q(T, `select dp_review_submission('${SUB}','Shared: nicely done','approved')`);
+    await db.exec(`update dp_sessions set student_visible_notes='Shared lesson summary',private_faculty_notes='Private faculty note' where student_id='${B}' and appointment_status='completed'`);
+    const before = async () => ({
+      sessions: (await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and appointment_status='completed'`)).rows[0].n,
+      assignments: (await q(B, `select count(*)::int n from dp_assignments where id='${ASSIGN_B}'`)).rows[0].n,
+      submissions: (await q(B, `select count(*)::int n from dp_submissions where id='${SUB}'`)).rows[0].n,
+      shared: (await q(B, `select count(*)::int n from dp_feedback where submission_id='${SUB}'`)).rows[0].n,
+      progress: (await q(B, `select count(*)::int n from dp_lesson_progress where user_id='${B}' and status='completed'`)).rows[0].n,
+      lesson: (await q(B, `select count(*)::int n from dp_lessons where id='${LESSON}'`)).rows[0].n,
+      summaries: (await q(B, `select count(*)::int n from dp_my_session_summaries('vocal-coaching') where student_visible_notes is not null`)).rows[0].n,
+      privateNotes: (await db.query<any>(`select count(*)::int n from dp_feedback where submission_id='${SUB}' and is_private`)).rows[0].n + (await db.query<any>(`select count(*)::int n from dp_sessions where student_id='${B}' and private_faculty_notes is not null`)).rows[0].n
+    });
+    const paid = await before();
+    expect(paid.progress).toBe(1); expect(paid.shared).toBe(1); expect(paid.privateNotes).toBeGreaterThan(1);
+    for (const order of ["3001", "3002", "3003"])
+      await db.exec("set role service_role").then(() => db.query(`select dp_record_package_purchase('${B}','${id(92)}',1,'${order}','1','wc-product-2002','refunded')`)).finally(() => db.exec("reset role"));
+    expect((await db.query<any>(`select payment_status,installments_paid from dp_coaching_packages where student_id='${B}' and tier_id='${id(92)}'`)).rows[0]).toMatchObject({ payment_status: "refunded", installments_paid: 0 });
+    expect(await before()).toEqual(paid); // nothing was deleted or hidden
+    // the student can no longer use paid-for entitlements, and private notes stay private
+    expect((await q(B, `select dp_my_coaching_overview('vocal-coaching') o`)).rows[0].o.credits_by_minutes).toEqual({});
+    expect((await q(B, `select count(*)::int n from dp_feedback where submission_id='${SUB}' and is_private`)).rows[0].n).toBe(0);
+    await denied(T, `select dp_set_lesson_status((select id from dp_sessions where student_id='${B}' and appointment_status='cancelled' limit 1),'completed')`);
+  });
+  it("lets the whole 12-week program be scheduled while only unlocked lessons are chargeable", async () => {
+    const plan = (await db.query<any>(`select id from dp_coaching_plans where student_id='${A}'`)).rows[0].id;
+    const n = (await q(T, `select dp_generate_appointments('${plan}', current_date + 84) n`)).rows[0].n;
+    expect(n).toBeGreaterThan(0);
+    expect((await db.query<any>(`select count(*)::int n from dp_sessions where plan_id='${plan}'`)).rows[0].n).toBeGreaterThanOrEqual(11);
+  });
+});
+
+describe("installment payment attribution (never guess)", () => {
+  const T3 = id(92);
+  const buy = (student: string, order: string, status = "paid", ref: string | null = null) =>
+    db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${T3}',1,'${order}','1','wc-product-2002','${status}',${ref ? `'${ref}'` : "null"}) id`)).finally(() => db.exec("reset role"));
+  const pk = async (pid: string) => (await db.query<any>(`select installments_paid,payment_status from dp_coaching_packages where id='${pid}'`)).rows[0];
+  const attribution = async (order: string) => (await db.query<any>(`select attribution from dp_package_payments where external_order_id='${order}'`)).rows[0]?.attribution;
+  const unmatched = async () => (await db.query<any>(`select id,external_order_id,reason from dp_unmatched_payments where resolved_at is null order by received_at`)).rows;
+
+  it("a first payment with no open plan starts a new purchase; a second unreferenced payment waits for a person", async () => {
+    const p1 = (await buy(E, "4001")).rows[0].id;
+    expect(await attribution("4001")).toBe("new");
+    expect((await buy(E, "4002")).rows[0].id).toBeNull(); // E has one open plan, no reference, tier does not allow guessing
+    expect((await buy(E, "4002")).rows[0].id).toBeNull(); // replay: still waiting, not duplicated
+    const waiting = await unmatched();
+    expect(waiting).toHaveLength(1);
+    expect(waiting[0].reason).toMatch(/open plan and the payment carries no reference/);
+    expect(await pk(p1)).toMatchObject({ installments_paid: 1, payment_status: "partial" });
+    // students cannot see or resolve it; staff can match it to the exact purchase
+    expect((await q(E, `select count(*)::int n from dp_unmatched_payments`)).rows[0].n).toBe(0);
+    await denied(E, `select dp_resolve_unmatched_payment('${waiting[0].id}','${p1}')`);
+    await denied(T, `select dp_resolve_unmatched_payment('${waiting[0].id}','${id(999)}')`); // not this student's purchase
+    expect((await q(T, `select count(*)::int n from dp_unmatched_payments`)).rows[0].n).toBe(1);
+    await q(T, `select dp_resolve_unmatched_payment('${waiting[0].id}','${p1}')`);
+    expect(await pk(p1)).toMatchObject({ installments_paid: 2, payment_status: "partial" });
+    expect(await attribution("4002")).toBe("manual");
+    expect(await unmatched()).toHaveLength(0);
+    await denied(T, `select dp_resolve_unmatched_payment('${waiting[0].id}','${p1}')`); // already matched
+  });
+  it("a payment that carries the first order's id goes to exactly that purchase", async () => {
+    const p1 = (await db.query<any>(`select package_id from dp_package_payments where external_order_id='4001'`)).rows[0].package_id;
+    expect((await buy(E, "4003", "paid", "4001")).rows[0].id).toBe(p1);
+    expect(await attribution("4003")).toBe("reference");
+    expect(await pk(p1)).toMatchObject({ installments_paid: 3, payment_status: "paid" });
+    expect((await buy(E, "4004", "paid", "4001")).rows[0].id).toBeNull(); // that plan is already complete
+    expect((await unmatched())[0].reason).toMatch(/already has all of its payments/);
+    await expect(buy(E, "4005", "paid", "999999")).rejects.toThrow(/not been recorded yet/); // the store will retry
+    await expect(buy(D, "4006", "paid", "4001")).rejects.toThrow(/not been recorded yet/); // another student's purchase is never matched
+  });
+  it("with several open plans every payment is matched by reference or by a person", async () => {
+    await db.exec("update dp_unmatched_payments set resolved_at=now() where resolved_at is null");
+    const open1 = (await db.query<any>(`select package_id from dp_package_payments where external_order_id='3101'`)).rows[0].package_id;
+    expect((await buy(D, "4102")).rows[0].id).toBeNull();
+    const w = (await unmatched())[0];
+    const open2 = (await q(ADMIN, `select dp_resolve_unmatched_payment('${w.id}',null) id`)).rows[0].id; // "start a new plan from this payment"
+    expect(open2).not.toBe(open1);
+    expect((await buy(D, "4103")).rows[0].id).toBeNull();
+    expect((await unmatched())[0].reason).toMatch(/several open plans/);
+    expect((await buy(D, "4104", "paid", "3101")).rows[0].id).toBe(open1);
+    expect((await buy(D, "4105", "paid", "4102")).rows[0].id).toBe(open2);
+    expect(await pk(open1)).toMatchObject({ installments_paid: 2 });
+    expect(await pk(open2)).toMatchObject({ installments_paid: 2 });
+  });
+  it("a tier may opt in to matching a single open plan without a reference, and records that it did", async () => {
+    await db.exec("update dp_unmatched_payments set resolved_at=now() where resolved_at is null");
+    await q(ADMIN, `update dp_coaching_tiers set allow_unreferenced_match=true where id='${T3}'`);
+    const open = (await db.query<any>(`select package_id from dp_package_payments where external_order_id='3201'`)).rows[0].package_id;
+    expect((await buy(A, "3203")).rows[0].id).toBe(open);
+    expect(await attribution("3203")).toBe("sequential");
+    await q(ADMIN, `update dp_coaching_tiers set allow_unreferenced_match=false where id='${T3}'`);
   });
 });
 

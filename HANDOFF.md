@@ -181,3 +181,15 @@ pages (they see no data) but cannot review course-less weekly-plan homework (onl
   consent or republish a withdrawn testimonial.
 - **Price wording corrected:** the 12-week 60-minute plan is $720 = 3 x $240; the store's current $248 per payment is a value to change.
 - Browser suite: 51 tests (39 role and flow tests, 12 responsive), all passing on the local stack. Hosted-project smoke test still required.
+
+
+## October 29 final-round update: owner decisions on PR #3
+1. Proportional unlocking approved (4, 8, 12). 2. Scheduling is separate from payment: the whole program can be scheduled; recording a lesson as
+taught needs a paid, unlocked lesson or a waiver with a reason (enforced in the database); teaching content (not lesson rows) is gated by package
+level and/or paid-lesson count. 3. Refunds restrict access only; completed lessons, assignments, feedback, progress and notes are preserved (tested).
+4. Public testimonial page stays unlisted and noindex; a live iframe embed and a no-store JSON feed exist for the website; withdrawal removes the
+review from every surface; external copies cannot be withdrawn (documented). 5. Prices: $504 (3 x $168) and $720 (3 x $240); store untouched.
+6. Payment attribution: reference-based matching (order meta `dove_plan_order` or parent order), unmatched payments queue for a person, optional single-open-plan
+shortcut per package (off by default). 7. Migrations and deployment remain on hold until the hosted-project smoke test and final release review.
+
+Browser suite: 52 tests passing on the local stack (40 role/flow, 12 responsive). Database tests, unit tests, type check, lint and production build pass.
