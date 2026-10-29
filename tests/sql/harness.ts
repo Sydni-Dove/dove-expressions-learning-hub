@@ -21,7 +21,7 @@ do $$ begin
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 exception when duplicate_object then null; end $$;
 create schema if not exists storage;
-create table storage.buckets (id text primary key, name text, public boolean default false);
+create table storage.buckets (id text primary key, name text, public boolean default false, file_size_limit bigint, allowed_mime_types text[]);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
 alter table storage.objects enable row level security;
 create function storage.foldername(name text) returns text[] language sql immutable as $$
@@ -34,6 +34,8 @@ grant usage on schema public, auth, storage to anon, authenticated;
 export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip: ["0025"] }) {
   const db = new PGlite();
   await db.exec(BOOTSTRAP);
+  // Supabase grants new functions to API roles at creation time; later REVOKEs must persist.
+  await db.exec(`alter default privileges in schema public grant execute on functions to anon, authenticated;`);
   const dir = path.join(__dirname, "../../supabase/migrations");
   const files = fs.readdirSync(dir).filter((f) => /^(?:\d{4}|\d{14})_.*\.sql$/.test(f)).sort();
   const applied: string[] = [];
@@ -44,7 +46,6 @@ export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip
     applied.push(f);
   }
   await db.exec(`grant all on all tables in schema public to anon, authenticated;
-                 grant execute on all functions in schema public to anon, authenticated;
                  grant select, insert, update, delete on all tables in schema storage to authenticated;`);
   return { db, applied };
 }
