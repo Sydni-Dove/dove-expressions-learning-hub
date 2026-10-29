@@ -172,8 +172,8 @@ pages (they see no data) but cannot review course-less weekly-plan homework (onl
 ## October 29 late update: review feedback on PR #3 (installments, public reviews, withdrawal)
 - **Installment rule:** packages have a number of payments; lessons unlock in proportion to payments received (12 over 3 = 4, 8, 12);
   refunds take lessons back; lessons taught early are settled when payments arrive; installment quantity above 1 is refused. Store
-  payments are recorded per order line in `dp_package_payments`. Owner must confirm the unlock schedule and how the store collects the
-  three payments.
+  payments are recorded per order line in `dp_package_payments`. Owner confirmed the store sends one separate order per installment; the unlock schedule
+  (4, 8, 12) still needs confirmation.
 - **Public review display:** `/testimonials` (signed-out visitors), fed by `dp_public_testimonials()`; first name only; video through
   10-minute signed links permitted by a storage policy that exists only while a testimonial is approved, consented, published and not
   withdrawn.

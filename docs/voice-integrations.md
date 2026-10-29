@@ -78,9 +78,10 @@ the third. Lessons already taught before a payment arrives are charged to the pa
 installment takes its lessons back out of the unlocked balance. Each paid store order line counts as one payment on the student's
 open package for that product (a replayed order changes nothing; buying quantity 2 of an installment product is refused rather than
 guessed). The student's dashboard says, for example, "Payment 1 of 3 received: 4 of 12 lessons unlocked." Tested end to end through
-the webhook route on the local stack. **Please confirm** that proportional unlocking is what you want, and how the store collects
-the three payments (separate orders per installment is assumed; if the store uses a payment-plan plugin that sends one order,
-tell me and the mapping changes).
+the webhook route on the local stack. **Confirmed by the owner (October 29):** the store collects each installment as its own separate order. That is how the Hub reads it.
+Limit to know: the Hub attaches each paid order for an installment product to that student's earliest plan still waiting for payments,
+so if one student bought two 12-week plans at the same time their payments would be applied in order, not matched to a specific plan.
+Still to confirm: that proportional unlocking (4, 8, 12) is the schedule you want.
 
 ### Payment-first, then booking (needs a WordPress change; not done)
 Because the pages are public iframes, "pay first" is not enforced today. Options, in order of effort: (1) after checkout,
