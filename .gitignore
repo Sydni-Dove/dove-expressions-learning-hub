@@ -4,3 +4,10 @@ node_modules/
 .vercel/
 .DS_Store
 *.tsbuildinfo
+
+# local authenticated test stack output
+test-results/
+testing/local-supabase/ids.json
+testing/local-supabase/anon.txt
+testing/local-supabase/results.json
+testing/local-supabase/screenshots/

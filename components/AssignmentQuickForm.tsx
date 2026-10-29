@@ -51,8 +51,10 @@ export default function AssignmentQuickForm({ lessonId, courseId, assignments }:
       const values = { lesson_id:lessonId, course_id:courseId, title:title.trim(), description:description.trim(),
         assignment_type:type, due_at:dueAt ? `${dueAt}T23:59:59Z` : null, assigned_to_user_id:student || null,
         song:song.trim(), goal:goal.trim(), pacing:pacing.trim(), practice_steps:steps.split("\n").map(s=>s.trim()).filter(Boolean) };
-      const result = editing ? await supabase.from("dp_assignments").update(values).eq("id",editing.id).select("id").single()
-        : await supabase.from("dp_assignments").insert({...values,created_by:user.id}).select("id").single();
+      // No RETURNING on insert: the assignment access policies cannot yet see a row created in the same statement,
+      // so asking for the new row back is rejected even for authorized instructors.
+      const result = editing ? await supabase.from("dp_assignments").update(values).eq("id",editing.id)
+        : await supabase.from("dp_assignments").insert({...values,created_by:user.id});
       if (result.error) throw result.error;
       setOpen(false); router.refresh();
     } catch(e) { setError((e as {message?:string}).message ?? "Could not save assignment."); }

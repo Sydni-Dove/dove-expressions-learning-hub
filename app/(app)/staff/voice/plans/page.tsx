@@ -19,7 +19,7 @@ export default async function VoicePlansPage() {
   const students = roster.data ?? [];
   const name = (id: string | null) => students.find((x: { id: string }) => x.id === id)?.full_name || students.find((x: { id: string }) => x.id === id)?.email || "Student";
   return <div className="space-y-8 pb-20">
-    <div><Link href="/staff/voice" className="font-ui text-sm underline">← Voice command center</Link><h1 className="mt-2 font-display text-3xl text-burgundy">Plans and goals</h1>
+    <div><Link href="/staff/voice" className="link-action font-ui text-sm">← Voice command center</Link><h1 className="mt-2 font-display text-3xl text-burgundy">Plans and goals</h1>
       <p className="mt-1 font-body text-sm text-charcoal/70">Weekly plans are personal homework: students check off each exercise, record, submit, and you review in the usual queue.</p></div>
     {[roster, s, e, g].some(r => r.error) && <p role="alert" className="card p-4 text-sm">Some data could not be loaded. The student resources database migration may not be applied yet.</p>}
     <section><AssignPlanForm students={students} exercises={(e.data ?? []) as Exercise[]} templates={(t.data ?? []) as never} /></section>

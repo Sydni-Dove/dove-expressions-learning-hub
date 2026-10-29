@@ -63,33 +63,11 @@ export function PlanForm({ students, programId, instructorId }: { students: Stud
 
 export function GenerateButton({ planId }: { planId: string }) {
   const { busy, message, error, run } = useAction();
-  return <span><button disabled={busy} className="font-ui text-xs underline" onClick={() => run(async () => {
+  return <span><button disabled={busy} className="link-action font-ui text-xs" onClick={() => run(async () => {
     const through = new Date(Date.now() + 56 * 86400000).toISOString().slice(0, 10);
     const { data, error: e } = await createClient().rpc("dp_generate_appointments", { target_plan_id: planId, through });
     if (e) throw e; return `${data} new lesson${data === 1 ? "" : "s"} added.`;
   })}>{busy ? "Working…" : "Add next 8 weeks"}</button> <Feedback message={message} error={error}/></span>;
-}
-
-export function PackageForm({ students, programId, instructorId }: { students: Student[]; programId: string; instructorId: string }) {
-  const { busy, message, error, run } = useAction();
-  const [f, setF] = useState({ student: "", minutes: "60", credits: "4", status: "paid", expires: "" });
-  const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
-  const submit = (e: React.FormEvent) => { e.preventDefault(); run(async () => {
-    if (!f.student) throw new Error("Choose a student.");
-    const { error: e1 } = await createClient().from("dp_coaching_packages").insert({ student_id: f.student, program_id: programId, lesson_minutes: Number(f.minutes), credits_total: Number(f.credits), payment_status: f.status, expires_at: f.expires ? new Date(f.expires + "T23:59:59Z").toISOString() : null, source: "manual", created_by: instructorId });
-    if (e1) throw e1;
-    return "Package recorded.";
-  }); };
-  return <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
-    <p className="font-body text-xs text-charcoal/65 sm:col-span-2">Use this only for payments made outside the website (cash, transfer, complimentary). Website purchases are recorded automatically once the store connection is enabled.</p>
-    <label className="font-ui text-sm sm:col-span-2">Student<select value={f.student} onChange={e => set("student", e.target.value)} className="input mt-1 w-full"><option value="">Choose…</option>{students.map(s => <option key={s.id} value={s.id}>{label(s)}</option>)}</select></label>
-    <label className="font-ui text-sm">Lesson length<select value={f.minutes} onChange={e => set("minutes", e.target.value)} className="input mt-1 w-full"><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label>
-    <label className="font-ui text-sm">Lessons in package<input type="number" min={1} max={100} value={f.credits} onChange={e => set("credits", e.target.value)} className="input mt-1 w-full"/></label>
-    <label className="font-ui text-sm">Payment<select value={f.status} onChange={e => set("status", e.target.value)} className="input mt-1 w-full"><option value="paid">Paid</option><option value="complimentary">Complimentary</option><option value="pending">Pending</option></select></label>
-    <label className="font-ui text-sm">Expires (optional)<input type="date" value={f.expires} onChange={e => set("expires", e.target.value)} className="input mt-1 w-full"/></label>
-    <div className="sm:col-span-2"><button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Record package"}</button></div>
-    <div className="sm:col-span-2"><Feedback message={message} error={error}/></div>
-  </form>;
 }
 
 const STATUSES = [["new", "New"], ["acknowledged", "Acknowledged"], ["booked", "Consultation booked"], ["consulted", "Consultation held"], ["recommended", "Recommendation sent"], ["enrolled", "Enrolled"], ["closed", "Closed"]];
@@ -105,5 +83,5 @@ export function ConsultationStatus({ id, status }: { id: string; status: string 
 
 export function MarkReminderSent({ id }: { id: string }) {
   const { busy, error, run } = useAction();
-  return <span><button disabled={busy} className="font-ui text-xs underline" onClick={() => run(async () => { const { error: e } = await createClient().from("dp_consultation_inquiries").update({ reminder_sent_at: new Date().toISOString() }).eq("id", id); if (e) throw e; return "Marked"; })}>Mark reminder sent</button>{error && <span role="alert" className="ml-2 text-xs text-[#7a2c1c]">{error}</span>}</span>;
+  return <span><button disabled={busy} className="link-action font-ui text-xs" onClick={() => run(async () => { const { error: e } = await createClient().from("dp_consultation_inquiries").update({ reminder_sent_at: new Date().toISOString() }).eq("id", id); if (e) throw e; return "Marked"; })}>Mark reminder sent</button>{error && <span role="alert" className="ml-2 text-xs text-[#7a2c1c]">{error}</span>}</span>;
 }

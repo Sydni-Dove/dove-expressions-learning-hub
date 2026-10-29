@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/roles";
 import { Pill, EmptyState } from "@/components/ui";
 import LocalTime from "@/components/LocalTime";
-import { LessonStatusButtons, PlanForm, PackageForm, GenerateButton, ConsultationStatus, MarkReminderSent } from "@/components/voice/CommandForms";
+import { LessonStatusButtons, PlanForm, GenerateButton, ConsultationStatus, MarkReminderSent } from "@/components/voice/CommandForms";
 import { CAPACITY, capacitySummary, renewalAttention, consultationState, slotLabel, type Plan, type Balance } from "@/lib/voice-command";
 
 export const dynamic = "force-dynamic";
@@ -90,7 +90,7 @@ export default async function VoiceCommandCenter() {
       {students.length ? <table className="mt-3 w-full min-w-[720px] text-left font-body text-sm"><thead className="font-ui text-xs uppercase text-charcoal/60"><tr><th className="py-2 pr-3">Student</th><th className="pr-3">Schedule</th><th className="pr-3">Lessons left</th><th className="pr-3">Reviewed / waiting</th><th className="pr-3">Next lesson</th><th /></tr></thead>
         <tbody className="divide-y divide-charcoal/10">{students.map(s => { const plan = plans.find(p => p.student_id === s.id); const next = lessons.find(l => l.student_id === s.id && new Date(l.scheduled_at as string) >= now);
           const mine = submissions.filter(x => x.student_id === s.id); const exp = nextExpiry(s.id);
-          return <tr key={s.id} className="align-top"><td className="py-3 pr-3"><Link href={`/staff/students/${s.id}`} className="font-semibold text-burgundy hover:underline">{s.full_name || s.email}</Link></td>
+          return <tr key={s.id} className="align-top"><td className="py-3 pr-3"><Link href={`/staff/students/${s.id}`} className="inline-flex min-h-[44px] items-center font-semibold text-burgundy hover:underline">{s.full_name || s.email}</Link></td>
             <td className="pr-3">{plan ? <>{slotLabel(plan)}<br /><GenerateButton planId={plan.id} /></> : <span className="text-charcoal/50">Not scheduled</span>}</td>
             <td className="pr-3">{creditsFor(s.id)}{exp && <span className="block text-xs text-charcoal/60">expires {new Date(exp).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</span>}</td>
             <td className="pr-3">{mine.filter(x => ["approved", "exempt"].includes(x.status)).length} / {mine.filter(x => ["submitted", "revised"].includes(x.status)).length}</td>
@@ -113,10 +113,10 @@ export default async function VoiceCommandCenter() {
 
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="card p-5" aria-labelledby="plan-h"><h2 id="plan-h" className="font-display text-xl text-burgundy">Set a student’s lesson schedule</h2><div className="mt-3">{programId ? <PlanForm students={students} programId={programId} instructorId={user.id} /> : <p className="text-sm">Voice program not found.</p>}</div></section>
-      <section className="card p-5" aria-labelledby="pkg-h"><h2 id="pkg-h" className="font-display text-xl text-burgundy">Record a lesson package</h2><div className="mt-3">{programId ? <PackageForm students={students} programId={programId} instructorId={user.id} /> : null}</div></section>
+      <section className="card p-5" aria-labelledby="pkg-h"><h2 id="pkg-h" className="font-display text-xl text-burgundy">Packages</h2><p className="mt-3 font-body text-sm text-charcoal/70">Define what each package includes and record packages for students.</p><Link href="/staff/voice/packages" className="btn-secondary mt-4 inline-block">Manage packages and library access</Link></section>
     </div>
 
-    <nav aria-label="Related" className="flex flex-wrap gap-4 font-ui text-sm"><Link className="underline" href="/staff/voice/plans">Plans and goals</Link><Link className="underline" href="/staff/voice/library">Exercise library and guides</Link><Link className="underline" href="/staff/voice-reviews">Testimonials{(testimonialsRes.count ?? 0) > 0 ? ` (${testimonialsRes.count} pending)` : ""}</Link><Link className="underline" href="/staff/courses">Curriculum and lessons</Link><Link className="underline" href="/staff/assignments">Assignments</Link></nav>
+    <nav aria-label="Related" className="flex flex-wrap gap-4 font-ui text-sm"><Link className="link-action" href="/staff/voice/plans">Plans and goals</Link><Link className="link-action" href="/staff/voice/library">Exercise library and guides</Link><Link className="link-action" href="/staff/voice-reviews">Testimonials{(testimonialsRes.count ?? 0) > 0 ? ` (${testimonialsRes.count} pending)` : ""}</Link><Link className="link-action" href="/staff/courses">Curriculum and lessons</Link><Link className="link-action" href="/staff/assignments">Assignments</Link></nav>
   </div>;
 }
 

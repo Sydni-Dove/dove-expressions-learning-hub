@@ -17,7 +17,7 @@ export default function VoiceReviewModeration({reviews}:{reviews:Review[]}) {
    <div className="flex flex-wrap gap-2 text-xs font-ui text-charcoal/60"><span>{r.student_name||"Student"}</span><span>· {new Date(r.created_at).toLocaleDateString()}</span><span>· {r.status==="declined"?"rejected":r.status}</span><span>· Public-use permission: {r.allow_public_use?"granted":"not granted"}</span>{r.published_at&&<span className="font-semibold text-green-700">· Published</span>}</div>
    {r.review_text&&<p className="mt-3 whitespace-pre-wrap text-sm font-body">{r.review_text}</p>}
    {r.video_signed_url&&<video controls preload="metadata" playsInline src={r.video_signed_url} className="mt-3 w-full max-w-md rounded-xl bg-charcoal"/>}
-   {r.video_url&&<a className="mt-3 block break-all text-sm text-burgundy underline" href={r.video_url} target="_blank" rel="noopener noreferrer">Testimonial video link</a>}
+   {r.video_url&&<a className="mt-3 inline-flex min-h-[44px] items-center break-all text-sm text-burgundy underline" href={r.video_url} target="_blank" rel="noopener noreferrer">Testimonial video link</a>}
    <p className="mt-3 text-xs text-charcoal/60">Approving is internal moderation. Publishing is a separate step and is only possible when the student granted public-use permission.</p>
    <div className="mt-3 flex flex-wrap gap-3">
     <button disabled={busy===r.id||r.status==="approved"} onClick={()=>decide(r.id,"approved")} className="btn-primary">Approve</button>

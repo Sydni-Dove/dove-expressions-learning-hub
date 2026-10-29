@@ -83,7 +83,7 @@ export default async function VocalCoachingPage() {
               <p className="mt-3 font-display text-2xl text-[#630000]"><LocalTime iso={nextLesson.scheduled_at} /></p>
               <p className="mt-1 font-body text-sm text-[#1B1717]/70">{nextLesson.lesson_minutes}-minute private lesson{overview?.plan ? ` · ${overview.plan.cadence === "weekly" ? "weekly" : "every other week"}` : ""}</p>
             </> : <p className="mt-3 font-body text-sm text-[#1B1717]/70">{isStudent ? "Your next lesson will appear here once your instructor schedules it." : "Staff preview: students see their next scheduled lesson here."}</p>}
-            <Link href="/messages" className="mt-4 inline-flex items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">Message your instructor <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/messages" className="mt-2 inline-flex min-h-[44px] items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">Message your instructor <ArrowUpRight className="h-4 w-4" /></Link>
           </section>
         </div>
       </header>
@@ -137,7 +137,7 @@ export default async function VocalCoachingPage() {
             <div className="rounded-2xl bg-[#F2DFD8]/40 p-3"><dt className="font-ui text-[11px] uppercase tracking-wide text-[#1B1717]/60">Revisions</dt><dd className="font-display text-2xl text-[#630000]">{Math.max(0, attempts.length - new Set(attempts.map(t => t.assignment_id)).size)}</dd></div>
             <div className="rounded-2xl bg-[#F2DFD8]/40 p-3"><dt className="font-ui text-[11px] uppercase tracking-wide text-[#1B1717]/60">Recordings</dt><dd className="font-display text-2xl text-[#630000]">{attempts.filter(t => t.file_urls?.length).length}</dd></div>
           </dl>
-          <Link href="/progress" className="mt-5 inline-flex items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">See full progress <ArrowUpRight className="h-4 w-4" /></Link>
+          <Link href="/progress" className="mt-3 inline-flex min-h-[44px] items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">See full progress <ArrowUpRight className="h-4 w-4" /></Link>
         </section>
 
         <section aria-labelledby="feedback-h" className="rounded-3xl border border-[#630000]/10 bg-white p-6">
@@ -156,7 +156,7 @@ export default async function VocalCoachingPage() {
           <p className="font-ui text-xs font-bold text-[#630000]">{titleFor(t.assignment_id)} · attempt {t.attempt_no} · {new Date(t.submitted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</p>
           {t.file_urls.map(u => <RecordingPlayer key={u} label={recordingLabel(u)} original={u} signedUrl={signed.find(x => x.original === u)?.signed ?? ""} />)}</div>)}</div>
           : <p className="mt-4 rounded-xl bg-[#F2DFD8]/30 p-5 font-body text-sm">Record or upload your singing from an assignment and it will be kept here, privately.</p>}
-        <Link href="/assignments" className="mt-4 inline-flex items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">All attempts and feedback <ArrowUpRight className="h-4 w-4" /></Link>
+        <Link href="/assignments" className="mt-2 inline-flex min-h-[44px] items-center gap-1 font-ui text-sm font-bold text-[#630000] underline">All attempts and feedback <ArrowUpRight className="h-4 w-4" /></Link>
       </section>
 
       <section aria-labelledby="history-h" className="rounded-3xl border border-[#630000]/10 bg-white p-6">

@@ -64,6 +64,7 @@ export const staffNav: NavItem[] = [
   { href: "/staff/dashboard", label: "Dashboard", roles: ["faculty", "teacher", "mentor", "super_admin"] },
   { href: "/staff/students", label: "Students", roles: ["faculty", "teacher", "mentor", "super_admin"] },
   { href: "/staff/voice", label: "Voice Command Center", roles: ["faculty", "teacher", "super_admin"] },
+  { href: "/staff/voice/packages", label: "Voice Packages", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/library", label: "Voice Library", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/plans", label: "Voice Plans & Goals", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/voice", label: "Voice Home Preview", roles: ["faculty", "teacher", "super_admin"] },

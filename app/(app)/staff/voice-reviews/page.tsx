@@ -15,7 +15,7 @@ export default async function StaffVoiceReviewsPage(){
   return {...r,video_signed_url:signed,student_name:who?.full_name||who?.email||undefined};
  }));
  return <div className="space-y-6 pb-16">
-  <div><Link href="/staff/dashboard" className="text-sm underline text-charcoal/60">← Staff Dashboard</Link>
+  <div><Link href="/staff/dashboard" className="link-action text-sm text-charcoal/60">← Staff Dashboard</Link>
   <h1 className="mt-3 font-display text-3xl text-burgundy">Voice testimonials</h1>
   <p className="mt-2 font-body text-sm text-charcoal/70">Review student feedback privately. Nothing is published automatically: a testimonial needs your approval and the student’s separate public-use permission.</p></div>
   {error?<p role="alert" className="card p-5 text-sm">Review records are unavailable. The voice testimonials database migration may not be applied yet.</p>:<VoiceReviewModeration reviews={reviews??[]}/>}

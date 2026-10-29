@@ -16,7 +16,7 @@ export default async function VoiceLibraryPage() {
   ]);
   const failed = [s, e, t, c].some(r => r.error);
   return <div className="space-y-8 pb-20">
-    <div><Link href="/staff/voice" className="font-ui text-sm underline">← Voice command center</Link><h1 className="mt-2 font-display text-3xl text-burgundy">Library and guides</h1>
+    <div><Link href="/staff/voice" className="link-action font-ui text-sm">← Voice command center</Link><h1 className="mt-2 font-display text-3xl text-burgundy">Library and guides</h1>
       <p className="mt-1 font-body text-sm text-charcoal/70">Write an exercise once and reuse it in any student’s plan. Videos stay on the site that hosts them; only the link is stored.</p></div>
     {failed && <p role="alert" className="card p-4 text-sm">This area is not available yet. The student resources database migration may not be applied.</p>}
     <section aria-labelledby="ex-h"><h2 id="ex-h" className="mb-3 font-display text-2xl text-burgundy">Exercise library</h2><ExerciseManager skills={(s.data ?? []) as Skill[]} exercises={(e.data ?? []) as Exercise[]} /></section>

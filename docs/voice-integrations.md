@@ -27,31 +27,43 @@ with two students sharing one slot in opposite weeks, 12 alternating students = 
 overlapping slots.
 
 ## WooCommerce -> Hub (built, not enabled)
-`POST /api/webhooks/woocommerce` verifies WooCommerce's HMAC signature, maps products to entitlements, matches the buyer by
+`POST /api/webhooks/woocommerce` verifies WooCommerce's HMAC signature, maps products to the Hub packages, matches the buyer by
 billing email to a Hub account, and calls `dp_record_package_purchase` (service role only, idempotent by order and line item;
 status changes such as refund update the same package; a later purchase is linked as a renewal).
 
-To enable (all require you or an admin): apply migration `20261029090000`; set server env `WOOCOMMERCE_WEBHOOK_SECRET`,
-`SUPABASE_SERVICE_ROLE_KEY`, `WOOCOMMERCE_PACKAGE_MAP`; in WooCommerce > Settings > Advanced > Webhooks add
+To enable (all require you or an admin): apply the migrations; create and link packages in the Hub; set server env
+`WOOCOMMERCE_WEBHOOK_SECRET` and `SUPABASE_SERVICE_ROLE_KEY`; in WooCommerce > Settings > Advanced > Webhooks add
 *Order created* and *Order updated* webhooks pointing at the deployed URL using the same secret. Students must sign up with
 the same email they use at checkout (otherwise WooCommerce shows a failed delivery and retries).
 
-### Package map needs your confirmation
-Unlisted products grant nothing. Proposed entries, inferred from names and prices, **not confirmed**:
-| Product (ID) | Price | Proposed entitlement | Question |
-|---|---|---|---|
-| Private lesson 45 min (1705) | $45 | 1 x 45 | - |
-| Private lesson 60 min (1793) | $70 | 1 x 60 | - |
-| Monthly, four 45-min (1785) | $172 | 4 x 45 | expiry? |
-| Monthly, four 60-min (1786) | $252 | 4 x 60 | expiry? |
-| 12-week 45 paid in full (1787) / 60 (1788) | $504 / $744 | 12 lessons | confirm 12 lessons, expiry |
-| 12-week 45 / 60, 3 payments (1846 / 1847) | $168 / $248 | 12 lessons | How are the 3 payments collected? The product is "simple" at the per-payment price; the order is not the whole purchase. |
-| Annual 45 / 60 (1789 / 1790, private) | $1,920 / $2,880 | 48 lessons? | currently unpublished |
-| 3-lesson (1707) / 6-lesson (1709) bundles | $120 / $225 | 3 / 6 lessons | 45 or 60 minutes? Not stated. |
-| Vocal Intensive 90 min (1794) | $105 | none | Hub supports 45/60-minute lessons only |
-| Demo 30 min (1703), Workshop (1718) | | none | not coaching credits |
+### Packages are configured in the Hub (staff > Voice > Packages)
+Each package defines: lesson count, lesson length (45 or 60), expiry, a library access level, whether it includes a personalized
+development plan, how many assessments and recording-feedback reviews it includes, and which store product IDs sell it.
+Entitlements are copied onto each purchase, so editing a package never changes what a student already bought. Nothing is
+seeded; products map to nothing until you link them, and unlinked products grant nothing.
 
-Example value: `{"1705":{"minutes":45,"credits":1,"valid_days":null},"1793":{"minutes":60,"credits":1,"valid_days":null}}`
+Finalized prices (owner, October 29) and the proposed entitlement for each. Prices live only in WooCommerce:
+| Package | Price | Entitlement to configure |
+|---|---|---|
+| Single lesson, 45 min | $45 | 1 x 45 |
+| Single lesson, 60 min | $65 | 1 x 60 |
+| Monthly, four weekly lessons, 45 min | $172 | 4 x 45, one-time purchase, no auto-renewal |
+| Monthly, four weekly lessons, 60 min | $248 | 4 x 60, one-time purchase, no auto-renewal |
+| 12-week coaching, twelve weekly lessons, 45 min | $504 (3 x $168) | 12 x 45 |
+| 12-week coaching, twelve weekly lessons, 60 min | $720 (3 x $240) | 12 x 60 |
+| Annual coaching | future only | not configured |
+| 3-lesson and 6-lesson bundles | discontinued | not configured |
+
+**Differences between these prices and the live store (read-only audit on October 29; nothing was changed):**
+60-minute single lesson is $70 (should be $65); monthly 60-minute is $252 (should be $248); 12-week 60-minute is $744 / 3 x $248
+(should be $720 / 3 x $240); the 3-lesson bundle (ID 1707, published) and 6-lesson bundle (ID 1709, private) still exist; private
+annual products (1789, 1790) exist; a 90-minute Vocal Intensive (1794) exists and the Hub only supports 45/60-minute lessons.
+Store product IDs for the entries above: 1705, 1793, 1785, 1786, 1787/1846 (12-week 45), 1788/1847 (12-week 60).
+
+**Open question for the 12-week "3 payments" products:** the store sells each as a simple product at the per-payment price
+(1846 = $168, 1847 = $248). The Hub grants a package per paid order line, so as the store is configured today a student who pays
+once would receive all twelve lessons. Decide when the lessons unlock (all on the first payment, or tied to payment 1/2/3)
+before enabling the webhook.
 
 ### Payment-first, then booking (needs a WordPress change; not done)
 Because the pages are public iframes, "pay first" is not enforced today. Options, in order of effort: (1) after checkout,

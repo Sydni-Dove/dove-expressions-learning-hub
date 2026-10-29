@@ -47,7 +47,7 @@ export function ExerciseManager({ skills, exercises }: { skills: Skill[]; exerci
     </form>
     {skills.map(s => { const list = exercises.filter(e => e.skill_id === s.id); if (!list.length) return null; return <div key={s.id} className="card p-5"><h3 className="font-display text-lg text-burgundy">{s.name}</h3>
       <ul className="mt-2 divide-y divide-charcoal/10">{list.map(e => <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className={`font-body text-sm ${e.is_active === false ? "text-charcoal/40 line-through" : ""}`}>{e.title}{e.video_url ? "" : " (no video)"}</span>
-        <span className="flex gap-3 font-ui text-xs"><button className="underline" onClick={() => load(e)}>Edit</button><button disabled={busy} className="underline" onClick={() => retire(e)}>{e.is_active === false ? "Restore" : "Hide"}</button></span></li>)}</ul></div>; })}
+        <span className="flex gap-1 font-ui text-xs"><button className="link-action" onClick={() => load(e)}>Edit</button><button disabled={busy} className="link-action" onClick={() => retire(e)}>{e.is_active === false ? "Restore" : "Hide"}</button></span></li>)}</ul></div>; })}
   </div>;
 }
 
@@ -68,7 +68,7 @@ export function TemplateManager({ exercises, templates }: { exercises: Exercise[
       <fieldset><legend className="font-ui text-sm font-semibold">Exercises (in the order you tick them)</legend>
         {active.length ? <div className="mt-2 grid gap-1 sm:grid-cols-2">{active.map(e => <label key={e.id} className="flex items-start gap-2 font-body text-sm"><input type="checkbox" checked={picked.includes(e.id)} onChange={ev => setPicked(ev.target.checked ? [...picked, e.id] : picked.filter(x => x !== e.id))} />{e.title}</label>)}</div> : <p className="font-body text-sm">Add exercises to the library first.</p>}</fieldset>
       <button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Save template"}</button><Note error={error} ok={ok} /></form>
-    <ul className="space-y-2">{templates.map(t => <li key={t.id} className="card flex flex-wrap items-center justify-between gap-2 p-4"><span className={`font-body text-sm ${t.is_active ? "" : "text-charcoal/40 line-through"}`}><strong>{t.title}</strong> · {t.items.length} exercise{t.items.length === 1 ? "" : "s"}</span><button disabled={busy} className="font-ui text-xs underline" onClick={() => remove(t.id, !t.is_active)}>{t.is_active ? "Hide" : "Restore"}</button></li>)}</ul>
+    <ul className="space-y-2">{templates.map(t => <li key={t.id} className="card flex flex-wrap items-center justify-between gap-2 p-4"><span className={`font-body text-sm ${t.is_active ? "" : "text-charcoal/40 line-through"}`}><strong>{t.title}</strong> · {t.items.length} exercise{t.items.length === 1 ? "" : "s"}</span><button disabled={busy} className="link-action font-ui text-xs" onClick={() => remove(t.id, !t.is_active)}>{t.is_active ? "Hide" : "Restore"}</button></li>)}</ul>
   </div>;
 }
 
@@ -86,7 +86,7 @@ export function AssignPlanForm({ students, exercises, templates }: { students: S
   const [f, setF] = useState({ student: "", title: "", notes: "", goal: "", due: "" });
   const [picked, setPicked] = useState<{ id: string; note: string; minutes: string }[]>([]);
   const active = exercises.filter(e => e.is_active !== false);
-  const useTemplate = (id: string) => { const t = templates.find(x => x.id === id); if (t) setPicked(t.items.filter(i => active.some(e => e.id === i.exercise_id)).map(i => ({ id: i.exercise_id, note: i.note ?? "", minutes: i.minutes ? String(i.minutes) : "" }))); };
+  const applyTemplate = (id: string) => { const t = templates.find(x => x.id === id); if (t) setPicked(t.items.filter(i => active.some(e => e.id === i.exercise_id)).map(i => ({ id: i.exercise_id, note: i.note ?? "", minutes: i.minutes ? String(i.minutes) : "" }))); };
   const toggle = (id: string, on: boolean) => setPicked(on ? [...picked, { id, note: "", minutes: "" }] : picked.filter(p => p.id !== id));
   const submit = (ev: React.FormEvent) => { ev.preventDefault(); run(async () => {
     if (!f.student || !f.title.trim() || !picked.length) throw new Error("Choose a student, a title and at least one exercise.");
@@ -96,7 +96,7 @@ export function AssignPlanForm({ students, exercises, templates }: { students: S
   }); };
   return <form onSubmit={submit} className="card space-y-3 p-5"><h3 className="font-display text-lg text-burgundy">Assign a weekly practice plan</h3>
     <label className="block font-ui text-sm">Student<select value={f.student} onChange={e => setF({ ...f, student: e.target.value })} className="input mt-1 w-full"><option value="">Choose…</option>{students.map(s => <option key={s.id} value={s.id}>{who(s)}</option>)}</select></label>
-    {templates.filter(t => t.is_active).length > 0 && <label className="block font-ui text-sm">Start from a template (optional)<select defaultValue="" onChange={e => { useTemplate(e.target.value); e.target.value = ""; }} className="input mt-1 w-full"><option value="">Choose a template…</option>{templates.filter(t => t.is_active).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>}
+    {templates.filter(t => t.is_active).length > 0 && <label className="block font-ui text-sm">Start from a template (optional)<select defaultValue="" onChange={e => { applyTemplate(e.target.value); e.target.value = ""; }} className="input mt-1 w-full"><option value="">Choose a template…</option>{templates.filter(t => t.is_active).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>}
     <label className="block font-ui text-sm">Plan title<input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="input mt-1 w-full" placeholder="Week of …" /></label>
     <label className="block font-ui text-sm">Note to the student (optional)<textarea rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} className="input mt-1 w-full" /></label>
     <label className="block font-ui text-sm">Focus for this week (optional)<input value={f.goal} onChange={e => setF({ ...f, goal: e.target.value })} className="input mt-1 w-full" /></label>
@@ -125,5 +125,5 @@ export function GoalManager({ students, skills, goals, instructorId }: { student
     <label className="font-ui text-sm">Target date (optional)<input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} className="input mt-1 block" /></label>
     <div className="sm:col-span-2"><button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Add goal"}</button></div><div className="sm:col-span-2"><Note error={error} ok={ok} /></div></form>
     <ul className="space-y-2">{goals.map(g => <li key={g.id} className="card flex flex-wrap items-center justify-between gap-2 p-4"><span className="font-body text-sm"><strong>{who(students.find(s => s.id === g.student_id) ?? { id: "", full_name: null, email: null })}</strong>: {g.title} <em className="text-charcoal/60">({g.status})</em></span>
-      <span className="flex gap-3 font-ui text-xs">{g.status !== "achieved" && <button disabled={busy} className="underline" onClick={() => setStatus(g.id, "achieved")}>Mark achieved</button>}{g.status === "active" && <button disabled={busy} className="underline" onClick={() => setStatus(g.id, "paused")}>Pause</button>}{g.status !== "active" && <button disabled={busy} className="underline" onClick={() => setStatus(g.id, "active")}>Reopen</button>}</span></li>)}</ul></div>;
+      <span className="flex gap-1 font-ui text-xs">{g.status !== "achieved" && <button disabled={busy} className="link-action" onClick={() => setStatus(g.id, "achieved")}>Mark achieved</button>}{g.status === "active" && <button disabled={busy} className="link-action" onClick={() => setStatus(g.id, "paused")}>Pause</button>}{g.status !== "active" && <button disabled={busy} className="link-action" onClick={() => setStatus(g.id, "active")}>Reopen</button>}</span></li>)}</ul></div>;
 }

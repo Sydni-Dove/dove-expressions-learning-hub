@@ -88,7 +88,7 @@ export default function SubmissionForm({ assignmentId, studentId, steps = [], dr
         <p className="font-ui text-sm font-semibold">Private recording: {recordingLabel(link)}</p>
         {preview ? (isVideoName(link) ? <video controls playsInline src={preview} className="w-full max-w-md rounded-xl"/> : <audio controls src={preview} className="w-full max-w-md"/>)
           : <button type="button" onClick={showPreview} className="btn-secondary">Play back</button>}
-        <button type="button" onClick={() => { setLink(""); setPreview(""); }} className="ml-2 font-ui text-sm underline">Replace recording</button>
+        <button type="button" onClick={() => { setLink(""); setPreview(""); }} className="link-action ml-2 font-ui text-sm">Replace recording</button>
       </div> : <>
         <label className="block font-ui text-sm">Record or upload your singing (private)<input type="file" accept={RECORDING_TYPES.join(",")} disabled={uploading} onChange={e => { upload(e.target.files?.[0]); e.target.value = ""; }} className="mt-1 block w-full font-body text-sm"/></label>
         <p className="font-body text-xs text-charcoal/65">{uploading ? "Uploading…" : `On a phone this lets you record with your microphone or camera. Audio or video up to ${MAX_RECORDING_MB} MB. Only you and your instructor can play it.`}</p>
