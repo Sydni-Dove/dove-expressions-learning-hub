@@ -65,6 +65,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/help": HelpCircle,
   "/staff/dashboard": LayoutDashboard,
   "/staff/students": Users2,
+  "/staff/voice": MicVocal,
   "/staff/voice-reviews": MicVocal,
   "/staff/programs": FolderKanban,
   "/staff/courses": GraduationCap,

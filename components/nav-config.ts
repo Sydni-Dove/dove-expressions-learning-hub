@@ -62,6 +62,7 @@ export const studentNavGroups: NavGroup[] = [
 export const staffNav: NavItem[] = [
   { href: "/staff/dashboard", label: "Dashboard", roles: ["faculty", "teacher", "mentor", "super_admin"] },
   { href: "/staff/students", label: "Students", roles: ["faculty", "teacher", "mentor", "super_admin"] },
+  { href: "/staff/voice", label: "Voice Command Center", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/voice", label: "Voice Home Preview", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice-reviews", label: "Voice Reviews", roles: ["faculty", "super_admin"] },
   { href: "/staff/programs", label: "Programs", roles: ["faculty", "super_admin"] },
