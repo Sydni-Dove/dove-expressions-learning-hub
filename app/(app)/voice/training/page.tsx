@@ -23,7 +23,8 @@ export default async function VoiceTrainingPage(){
  const {user,roles}=await getCurrentUserAndRoles();
  if(!user) redirect("/login");
  const staff=roles.some(r=>["super_admin","faculty","teacher"].includes(r));
- if(!staff&&!(await getStudentPrograms(user.id)).includes("voice")) redirect("/dashboard");
+ // The 12-session roadmap is an unpublished draft: staff only until the instructor releases the program.
+ if(!staff) redirect((await getStudentPrograms(user.id)).includes("voice") ? "/voice/resources" : "/dashboard");
  const supabase=createClient();
  const {data:courses}=await supabase.from("dp_courses").select("id,dp_programs!inner(slug)").eq("dp_programs.slug","vocal-coaching");
  const courseIds=(courses??[]).map(c=>c.id);

@@ -6,6 +6,7 @@ import { EmptyState, Pill } from "@/components/ui";
 import RecordingPlayer from "@/components/RecordingPlayer";
 import { signMediaList } from "@/lib/storage";
 import { recordingLabel } from "@/lib/recordings";
+import { linkHost, safeLink, type PlanItem } from "@/lib/voice-resources";
 import SubmissionForm, { PracticeDraft, PracticeAttempt } from "@/components/SubmissionForm";
 
 export default async function AssignmentsPage() {
@@ -15,7 +16,7 @@ export default async function AssignmentsPage() {
   // RLS handles direct, cohort, course AND program membership. Never fetch every
   // assignment on an enrolled course and accidentally expose another student's work.
   const { data: assignments, error } = await supabase.from("dp_assignments")
-    .select("id,title,description,assignment_type,due_at,course_id,lesson_id,song,goal,pacing,practice_steps")
+    .select("id,title,description,assignment_type,due_at,course_id,lesson_id,song,goal,pacing,practice_steps,practice_items")
     .order("due_at", { ascending: true, nullsFirst: false });
   const [{ data: submissions, error: submissionError }, { data: drafts, error: draftError }] = await Promise.all([
     supabase.from("dp_submissions").select("id,assignment_id,status,submitted_at,content,file_urls").eq("student_id", user.id).order("submitted_at", { ascending: false }),
@@ -43,6 +44,7 @@ export default async function AssignmentsPage() {
         <h2 className="mt-3 font-display text-xl text-burgundy">{a.title}</h2>
         {a.description && <p className="mt-2 whitespace-pre-wrap font-body text-sm">{a.description}</p>}
         <dl className="mt-3 space-y-1 font-body text-sm">{a.song && <div><dt className="inline font-bold">Song: </dt><dd className="inline">{a.song}</dd></div>}{a.goal && <div><dt className="inline font-bold">Goal: </dt><dd className="inline">{a.goal}</dd></div>}{a.pacing && <div><dt className="inline font-bold">Pace: </dt><dd className="inline">{a.pacing}</dd></div>}</dl>
+        {Array.isArray(a.practice_items) && a.practice_items.length > 0 && <ol className="mt-3 space-y-2" aria-label="Exercises in this plan">{(a.practice_items as PlanItem[]).map((it, i) => { const href = safeLink(it.video_url); return <li key={i} className="rounded-xl bg-pale-pink/30 p-3 font-body text-sm"><span className="font-ui font-bold">{i + 1}. {it.title}{it.minutes ? ` · ${it.minutes} min` : ""}</span>{it.note && <span className="block italic">{it.note}</span>}{it.instructions && <span className="block whitespace-pre-wrap">{it.instructions}</span>}{href && <a href={href} target="_blank" rel="noopener noreferrer" className="block font-ui text-burgundy underline">Watch demonstration ({linkHost(href)})</a>}</li>; })}</ol>}
         {a.lesson_id && a.course_id && <Link className="mt-3 inline-block font-ui text-sm text-burgundy underline" href={`/courses/${a.course_id}/lessons/${a.lesson_id}`}>Open assigned lesson</Link>}
         <SubmissionForm key={`${a.id}-${sub?.status ?? "draft"}`} preview={roles.some(r=>["super_admin","faculty","teacher","mentor"].includes(r))} assignmentId={a.id} studentId={user.id} steps={a.practice_steps ?? []} draft={draft as PracticeDraft | undefined} attempt={sub as PracticeAttempt | undefined}/>
         {(attempts ?? []).filter(t => t.assignment_id === a.id).length > 0 && <section className="mt-4" aria-label="Your submitted attempts"><h3 className="font-display text-lg text-burgundy">Your submitted attempts</h3>

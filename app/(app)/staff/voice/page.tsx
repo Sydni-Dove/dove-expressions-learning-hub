@@ -23,7 +23,11 @@ export default async function VoiceCommandCenter() {
   ]);
   const students = (rosterRes.data ?? []) as Student[];
   const courseIds = (coursesRes.data ?? []).map((c: { id: string }) => c.id);
-  const { data: assignments } = courseIds.length ? await supabase.from("dp_assignments").select("id,title,course_id").in("course_id", courseIds) : { data: [] };
+  const [courseAssignments, planAssignments] = await Promise.all([
+    courseIds.length ? supabase.from("dp_assignments").select("id,title,course_id").in("course_id", courseIds) : Promise.resolve({ data: [] }),
+    supabase.from("dp_assignments").select("id,title,course_id").not("practice_items", "is", null)
+  ]);
+  const assignments = [...(courseAssignments.data ?? []), ...(planAssignments.data ?? [])].filter((a, i, all) => all.findIndex(b => b.id === a.id) === i);
   const assignmentIds = (assignments ?? []).map(a => a.id);
   const titleOf = (id: string) => assignments?.find(a => a.id === id)?.title ?? "Assignment";
 
@@ -112,7 +116,7 @@ export default async function VoiceCommandCenter() {
       <section className="card p-5" aria-labelledby="pkg-h"><h2 id="pkg-h" className="font-display text-xl text-burgundy">Record a lesson package</h2><div className="mt-3">{programId ? <PackageForm students={students} programId={programId} instructorId={user.id} /> : null}</div></section>
     </div>
 
-    <nav aria-label="Related" className="flex flex-wrap gap-4 font-ui text-sm"><Link className="underline" href="/staff/voice-reviews">Testimonials{(testimonialsRes.count ?? 0) > 0 ? ` (${testimonialsRes.count} pending)` : ""}</Link><Link className="underline" href="/staff/courses">Curriculum and lessons</Link><Link className="underline" href="/staff/assignments">Assignments</Link></nav>
+    <nav aria-label="Related" className="flex flex-wrap gap-4 font-ui text-sm"><Link className="underline" href="/staff/voice/plans">Plans and goals</Link><Link className="underline" href="/staff/voice/library">Exercise library and guides</Link><Link className="underline" href="/staff/voice-reviews">Testimonials{(testimonialsRes.count ?? 0) > 0 ? ` (${testimonialsRes.count} pending)` : ""}</Link><Link className="underline" href="/staff/courses">Curriculum and lessons</Link><Link className="underline" href="/staff/assignments">Assignments</Link></nav>
   </div>;
 }
 

@@ -10,19 +10,8 @@ export function verifyWooSignature(rawBody: string, header: string | null, secre
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-/** Owner-confirmed product entitlements, keyed by WooCommerce product id. Unlisted products grant nothing. */
-const entitlement = z.object({
-  minutes: z.union([z.literal(45), z.literal(60)]),
-  credits: z.number().int().min(1).max(100),
-  valid_days: z.number().int().min(1).max(1095).nullable().default(null)
-});
-export const packageMapSchema = z.record(z.string().regex(/^\d+$/), entitlement);
-export type PackageMap = z.infer<typeof packageMapSchema>;
-
-export function parsePackageMap(raw: string | undefined): PackageMap {
-  if (!raw) return {};
-  return packageMapSchema.parse(JSON.parse(raw));
-}
+/** A configurable package (dp_coaching_tiers) and the store products that sell it. Unmapped products grant nothing. */
+export type TierRef = { id: string; woo_product_ids: string[] };
 
 export type PurchaseStatus = "pending" | "paid" | "refunded" | "failed";
 export function paymentStatusFor(orderStatus: string): PurchaseStatus | null {
@@ -42,20 +31,20 @@ const orderSchema = z.object({
   line_items: z.array(z.object({ id: z.number(), product_id: z.number(), quantity: z.number().int().min(1) }).passthrough())
 }).passthrough();
 
-export type PlannedPurchase = { orderId: string; lineItemId: string; productId: string; email: string; minutes: number; credits: number; validDays: number | null; status: PurchaseStatus };
+export type PlannedPurchase = { orderId: string; lineItemId: string; productId: string; email: string; tierId: string; quantity: number; status: PurchaseStatus };
 
 /** Turns one WooCommerce order payload into the package rows it should create or update. */
-export function planPurchases(payload: unknown, map: PackageMap): { purchases: PlannedPurchase[]; ignored: string[] } {
+export function planPurchases(payload: unknown, tiers: TierRef[]): { purchases: PlannedPurchase[]; ignored: string[] } {
   const order = orderSchema.parse(payload);
   const status = paymentStatusFor(order.status);
   if (!status) return { purchases: [], ignored: [`order status ${order.status}`] };
   const purchases: PlannedPurchase[] = []; const ignored: string[] = [];
   for (const item of order.line_items) {
-    const rule = map[String(item.product_id)];
-    if (!rule) { ignored.push(`product ${item.product_id}`); continue; }
+    const tier = tiers.find(t => t.woo_product_ids.includes(String(item.product_id)));
+    if (!tier) { ignored.push(`product ${item.product_id}`); continue; }
     purchases.push({
-      orderId: String(order.id), lineItemId: String(item.id), productId: String(item.product_id), email: order.billing.email.trim().toLowerCase(),
-      minutes: rule.minutes, credits: rule.credits * item.quantity, validDays: rule.valid_days, status
+      orderId: String(order.id), lineItemId: String(item.id), productId: String(item.product_id),
+      email: order.billing.email.trim().toLowerCase(), tierId: tier.id, quantity: Math.min(item.quantity, 20), status
     });
   }
   return { purchases, ignored };

@@ -74,7 +74,7 @@ export default async function VocalCoachingPage() {
             <p className="mt-4 max-w-md font-body text-base leading-relaxed text-white/80">Welcome, {firstName}. Your personal space for vocal growth, intentional practice, and confident expression.</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/assignments" className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#FDFDFD] px-5 py-3 font-ui text-sm font-bold text-[#630000] hover:bg-[#F2DFD8]">Open my practice <ArrowUpRight className="h-4 w-4" /></Link>
-              <Link href="/voice/training" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">12-session roadmap</Link>
+              <Link href="/voice/resources" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">Practice resources</Link>
             </div>
           </div>
           <section aria-labelledby="next-lesson" className="rounded-3xl bg-[#FDFDFD] p-6 text-[#1B1717] shadow-lg lg:col-span-2">

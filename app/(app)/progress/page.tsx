@@ -5,5 +5,5 @@ export default async function ProgressPage() {
  const {user}=await getCurrentUserAndRoles();
  if(!user) redirect("/login");
  const programs=await getStudentPrograms(user.id);
- redirect(programs.includes("voice") && !programs.includes("discipleship") ? "/voice/training" : "/discipleship/journey");
+ redirect(programs.includes("voice") && !programs.includes("discipleship") ? "/voice/resources" : "/discipleship/journey");
 }

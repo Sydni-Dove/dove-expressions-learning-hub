@@ -132,6 +132,38 @@ create table dp_coaching_plans(
 create unique index dp_coaching_plans_one_active on dp_coaching_plans(student_id,program_id) where status='active';
 create index dp_coaching_plans_slot_idx on dp_coaching_plans(instructor_id,weekday,lesson_time) where status='active';
 
+-- Package tiers are data, not code: the owner defines lesson count, length, expiry and what each level includes.
+-- Prices stay in WooCommerce. No tiers are seeded; the structure is not final.
+create table dp_coaching_tiers(
+ id uuid primary key default gen_random_uuid(),
+ program_id uuid not null references dp_programs(id),
+ slug text not null, name text not null, description text,
+ lesson_minutes int not null check(lesson_minutes in (45,60)),
+ lesson_count int not null check(lesson_count between 1 and 200),
+ valid_days int check(valid_days is null or valid_days between 1 and 1095),
+ -- Lessons tagged with a level (dp_lesson_access) open for packages at or above that level.
+ resource_level smallint not null default 0 check(resource_level between 0 and 3),
+ personal_plan boolean not null default false,
+ assessments_included int not null default 0 check(assessments_included>=0),
+ recording_feedback_included int not null default 0 check(recording_feedback_included>=0),
+ woo_product_ids text[] not null default '{}',
+ is_active boolean not null default true, sort_order int not null default 0,
+ created_at timestamptz not null default now(), unique(program_id,slug));
+alter table dp_coaching_tiers enable row level security;
+grant select,insert,update on dp_coaching_tiers to authenticated;
+create policy dp_tiers_staff on dp_coaching_tiers for all to authenticated
+ using(dp_private.manage_program(program_id)) with check(dp_private.manage_program(program_id));
+-- A WooCommerce product may map to only one active tier.
+create or replace function dp_private.check_tier_products() returns trigger
+language plpgsql set search_path=public as $$
+begin
+ if new.is_active and exists(select 1 from dp_coaching_tiers o where o.id<>new.id and o.is_active and o.woo_product_ids && new.woo_product_ids) then
+  raise exception 'A store product can belong to only one active package'; end if;
+ return new;
+end $$;
+create trigger dp_tier_products_guard before insert or update on dp_coaching_tiers
+ for each row execute function dp_private.check_tier_products();
+
 create table dp_coaching_packages(
  id uuid primary key default gen_random_uuid(),
  student_id uuid not null references auth.users(id) on delete cascade,
@@ -143,6 +175,10 @@ create table dp_coaching_packages(
  expires_at timestamptz,
  renewal_of uuid references dp_coaching_packages(id),
  source text not null default 'manual' check(source in ('manual','woocommerce')),
+ -- Entitlements are copied from the tier at purchase, so editing a tier never changes what a student already bought.
+ tier_id uuid references dp_coaching_tiers(id) on delete set null, tier_name text,
+ resource_level smallint not null default 0, personal_plan boolean not null default false,
+ assessments_included int not null default 0, recording_feedback_included int not null default 0,
  external_order_id text, external_line_item_id text, product_sku text, notes text,
  created_by uuid references auth.users(id), created_at timestamptz not null default now());
 create unique index dp_coaching_packages_external on dp_coaching_packages(source,external_order_id,coalesce(external_line_item_id,''))
@@ -224,7 +260,12 @@ create view dp_package_balances with(security_invoker=true) as
 select p.id package_id,p.student_id,p.program_id,p.lesson_minutes,p.credits_total,p.payment_status,p.purchased_at,p.expires_at,
  p.renewal_of,p.credits_total-count(s.id)::int as credits_remaining,
  p.payment_status in ('paid','complimentary') and (p.expires_at is null or p.expires_at>now()) as usable,
- exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) as renewed
+ exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) as renewed,
+ p.tier_name,p.resource_level,p.personal_plan,p.assessments_included,p.recording_feedback_included,
+ -- Approximate: shared feedback given on recorded submissions during the package period.
+ (select count(*)::int from dp_feedback f join dp_submissions sb on sb.id=f.submission_id
+   where sb.student_id=p.student_id and not f.is_private and cardinality(sb.file_urls)>0
+   and f.created_at>=p.purchased_at and (p.expires_at is null or f.created_at<=p.expires_at)) as recording_feedback_used
 from dp_coaching_packages p
 left join dp_sessions s on s.package_id=p.id and s.appointment_status in ('completed','late_cancelled','no_show')
 group by p.id;
@@ -298,36 +339,95 @@ returns jsonb language sql stable security definer set search_path=public as $$
   'credits_by_minutes',coalesce((select jsonb_object_agg(m,n) from (select lesson_minutes::text m,sum(remaining)::int n from bal
      where payment_status in ('paid','complimentary') and (expires_at is null or expires_at>now()) group by lesson_minutes) c),'{}'),
   'packages',coalesce((select jsonb_agg(to_jsonb(x) order by x.purchased_at desc) from (select credits_total,remaining,lesson_minutes,
-     payment_status,expires_at,purchased_at from bal) x),'[]')) end
+     payment_status,expires_at,purchased_at,tier_name,resource_level,personal_plan,assessments_included,recording_feedback_included,
+     (select count(*)::int from dp_feedback f join dp_submissions sb on sb.id=f.submission_id
+       where sb.student_id=auth.uid() and not f.is_private and cardinality(sb.file_urls)>0
+       and f.created_at>=bal.purchased_at and (bal.expires_at is null or f.created_at<=bal.expires_at)) recording_feedback_used from bal) x),'[]')) end
 $$;
 revoke all on function public.dp_my_coaching_overview(text) from public,anon;
 grant execute on function public.dp_my_coaching_overview(text) to authenticated;
 
+-- Shared package writer. Runs with the caller's rights; copies the tier's entitlements onto the package.
+create or replace function dp_private.create_package(student uuid,tier uuid,quantity int,pay_status text,expiry_override timestamptz,
+ src text,order_id text,line_item_id text,sku text,creator uuid) returns uuid
+language plpgsql set search_path=public as $$
+declare t dp_coaching_tiers; prev uuid; result uuid;
+begin
+ if pay_status not in ('pending','paid','complimentary','refunded','failed') then raise exception 'Unsupported payment status'; end if;
+ if quantity is null or quantity<1 or quantity>20 then raise exception 'Quantity must be between 1 and 20'; end if;
+ select * into t from dp_coaching_tiers where id=tier;
+ if t.id is null then raise exception 'Package type not found'; end if;
+ select id into prev from dp_coaching_packages p where p.student_id=student and p.program_id=t.program_id
+  and not exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) order by purchased_at desc limit 1;
+ insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,expires_at,renewal_of,source,
+  external_order_id,external_line_item_id,product_sku,tier_id,tier_name,resource_level,personal_plan,assessments_included,
+  recording_feedback_included,created_by)
+ values(student,t.program_id,t.lesson_minutes,t.lesson_count*quantity,pay_status,
+  coalesce(expiry_override,case when t.valid_days is null then null else now()+make_interval(days=>t.valid_days) end),prev,src,
+  order_id,line_item_id,sku,t.id,t.name,t.resource_level,t.personal_plan,t.assessments_included*quantity,
+  t.recording_feedback_included*quantity,creator)
+ returning id into result;
+ return result;
+end $$;
+
+-- Instructor action: record a package for a student from a tier (payments made outside the website).
+create or replace function public.dp_create_package(student uuid,tier uuid,pay_status text default 'paid',
+ quantity int default 1,expiry_override timestamptz default null) returns uuid
+language plpgsql security invoker set search_path=public as $$
+declare pid uuid;
+begin
+ select program_id into pid from dp_coaching_tiers where id=tier;
+ if pid is null or not dp_private.manage_program(pid) then raise exception 'Package unavailable'; end if;
+ if pay_status not in ('pending','paid','complimentary') then raise exception 'Choose pending, paid or complimentary'; end if;
+ return dp_private.create_package(student,tier,quantity,pay_status,expiry_override,'manual',null,null,null,auth.uid());
+end $$;
+revoke all on function public.dp_create_package(uuid,uuid,text,int,timestamptz) from public,anon;
+grant execute on function public.dp_create_package(uuid,uuid,text,int,timestamptz) to authenticated;
+
 -- Payment entitlement writer for the WooCommerce webhook (service role only, idempotent).
-create or replace function public.dp_record_package_purchase(student uuid,program_slug text,minutes int,credits int,
- valid_days int,order_id text,line_item_id text,sku text,pay_status text)
-returns uuid language plpgsql security definer set search_path=public as $$
-declare pid uuid; prog uuid; prev uuid; result uuid;
+create or replace function public.dp_record_package_purchase(student uuid,tier uuid,quantity int,order_id text,line_item_id text,
+ sku text,pay_status text) returns uuid language plpgsql security definer set search_path=public as $$
+declare pid uuid;
 begin
  if pay_status not in ('pending','paid','refunded','failed') then raise exception 'Unsupported payment status'; end if;
- select id into prog from dp_programs where slug=program_slug;
- if prog is null then raise exception 'Unknown program'; end if;
  select id into pid from dp_coaching_packages where source='woocommerce' and external_order_id=order_id
   and coalesce(external_line_item_id,'')=coalesce(line_item_id,'');
  if pid is not null then
   update dp_coaching_packages set payment_status=pay_status where id=pid;
   return pid;
  end if;
- select id into prev from dp_coaching_packages p where p.student_id=student and p.program_id=prog
-  and not exists(select 1 from dp_coaching_packages r where r.renewal_of=p.id) order by purchased_at desc limit 1;
- insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,expires_at,renewal_of,
-  source,external_order_id,external_line_item_id,product_sku)
- values(student,prog,minutes,credits,pay_status,case when valid_days is null then null else now()+make_interval(days=>valid_days) end,
-  prev,'woocommerce',order_id,line_item_id,sku) returning id into result;
- return result;
+ return dp_private.create_package(student,tier,quantity,pay_status,null,'woocommerce',order_id,line_item_id,sku,null);
 end $$;
-revoke all on function public.dp_record_package_purchase(uuid,text,int,int,int,text,text,text,text) from public,anon,authenticated;
-grant execute on function public.dp_record_package_purchase(uuid,text,int,int,int,text,text,text,text) to service_role;
+revoke all on function public.dp_record_package_purchase(uuid,uuid,int,text,text,text,text) from public,anon,authenticated;
+grant execute on function public.dp_record_package_purchase(uuid,uuid,int,text,text,text,text) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Reusable library with access levels: one set of lessons, many packages.
+-- A lesson with no row here is open to every enrolled student (today's behaviour).
+-- ---------------------------------------------------------------------------
+create table dp_lesson_access(
+ lesson_id uuid primary key references dp_lessons(id) on delete cascade,
+ min_level smallint not null check(min_level between 1 and 3),
+ updated_at timestamptz not null default now());
+alter table dp_lesson_access enable row level security;
+grant select,insert,update,delete on dp_lesson_access to authenticated;
+create policy dp_lesson_access_staff on dp_lesson_access for all to authenticated
+ using(exists(select 1 from dp_lessons l join dp_modules m on m.id=l.module_id where l.id=lesson_id and dp_private.manage_course(m.course_id)))
+ with check(exists(select 1 from dp_lessons l join dp_modules m on m.id=l.module_id where l.id=lesson_id and dp_private.manage_course(m.course_id)));
+create or replace function dp_private.student_resource_level(uid uuid) returns int
+language sql stable security definer set search_path=public as $$
+ select coalesce(max(resource_level),0)::int from dp_coaching_packages
+ where student_id=uid and payment_status in ('paid','complimentary') and (expires_at is null or expires_at>now())
+$$;
+create or replace function dp_private.lesson_level_ok(lid uuid, mid uuid) returns boolean
+language sql stable security definer set search_path=public as $$
+ select auth.uid() is not null and (
+  not exists(select 1 from dp_lesson_access a where a.lesson_id=lid)
+  or exists(select 1 from dp_lesson_access a where a.lesson_id=lid and a.min_level<=dp_private.student_resource_level(auth.uid()))
+  or exists(select 1 from dp_modules m where m.id=mid and dp_private.manage_course(m.course_id)))
+$$;
+create policy dp_lesson_level_boundary on dp_lessons as restrictive for select to authenticated
+ using(dp_private.lesson_level_ok(id,module_id));
 
 -- ---------------------------------------------------------------------------
 -- 4. Consultation inquiries (Google Form follow-up). Staff-only; PII.
