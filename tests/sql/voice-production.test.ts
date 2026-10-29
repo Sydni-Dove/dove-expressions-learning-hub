@@ -231,3 +231,20 @@ describe("testimonials", () => {
     await q(A, `insert into dp_voice_testimonials(student_id,video_path,allow_public_use) values ('${A}','${A}/clip.mp4',true)`);
   });
 });
+
+describe("draft curriculum content", () => {
+  it("adds teaching blocks to draft Voice lessons without publishing or overwriting", async () => {
+    const lessons = (await db.query<any>(`select l.slug,l.status,(select count(*)::int from dp_lesson_blocks b where b.lesson_id=l.id) n
+      from dp_lessons l where l.slug like 'voice-%' and l.slug not like 'fixture%' order by l.slug`)).rows;
+    expect(lessons).toHaveLength(12);
+    for (const l of lessons) { expect(l.status).toBe("draft"); expect(l.n).toBe(2); }
+    const topics = (await db.query<any>(`select string_agg(content->>'heading',' | ') h from dp_lesson_blocks where block_type='teaching_section'`)).rows[0].h;
+    for (const t of ["breath coordination and posture", "pitch accuracy and ear training", "range assessment", "chest, head and mixed", "transitions", "tone and resonance", "agility", "stamina and healthy", "gospel, worship and r&b", "song interpretation", "performance confidence", "development assessment"]) expect(topics.toLowerCase()).toContain(t);
+  });
+  it("does not touch lessons that already have content", async () => {
+    const before = (await db.query<any>(`select count(*)::int n from dp_lesson_blocks`)).rows[0].n;
+    const sql = (await import("node:fs")).readFileSync(new URL("../../supabase/migrations/20261029100000_dp_voice_draft_lesson_content.sql", import.meta.url), "utf8");
+    await db.exec(sql);
+    expect((await db.query<any>(`select count(*)::int n from dp_lesson_blocks`)).rows[0].n).toBe(before);
+  });
+});

@@ -93,3 +93,36 @@ unexposed `dp_private` schema. Remaining legacy advisories include unrelated fun
 and RLS tables intentionally without policies. References:
 https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
 https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+
+## October 29 update: production readiness work (branch `claude/voice-coaching-production-lwtpjk`)
+
+Built on top of PR #2 (this branch contains its commits). New work is additive and **not applied to the live database**
+and **not deployed**.
+
+### Added
+- Migration `20261029090000_dp_voice_recordings_scheduling_consultations.sql` (NOT applied): private `voice-recordings`
+  and `voice-testimonials` buckets (50 MB, audio/video types only, owner + managing instructor read, no overwrite), recording
+  reference validation (HTTPS link or own upload), `dp_submission_attempts` history, `dp_coaching_plans` (weekly / alternating
+  weeks, 45/60 min, overlap-proof), `dp_coaching_packages` (payment status, expiry, renewal link), lesson fields on `dp_sessions`
+  (credit use by status), `dp_package_balances`, `dp_generate_appointments`, `dp_set_lesson_status`, `dp_my_coaching_overview`,
+  `dp_program_students` (needed because live `profiles` is owner/admin-only), service-role `dp_record_package_purchase`,
+  `dp_consultation_inquiries`, and the testimonial consent/publish gate.
+- Migration `20261029100000_dp_voice_draft_lesson_content.sql` (NOT applied): draft teaching sections for the 12 lessons;
+  lessons stay `draft`; only lessons with no blocks are touched.
+- App: private recording upload + signed playback + attempt history (student and instructor), rebuilt Voice dashboard on live
+  data, `/staff/voice` command center, testimonial video upload with explicit consent and approval-gated publishing,
+  `/api/webhooks/woocommerce` (inert until env is set), consultation Apps Script and docs (`docs/voice-integrations.md`).
+- The migrations must be applied before the matching app code is deployed; the dashboard and command center degrade to
+  "not available" messages if they are missing, but uploads and testimonials will fail.
+
+### Validation actually run (local, October 29)
+TypeScript, lint (eslint 8.57.1 as in CI), unit tests, SQL replay tests (PGlite with real RLS), and production build.
+See the final report for counts. Unauthenticated route protection verified by curl (all Voice/staff routes redirect to /login);
+login and signup pages checked at 390, 820 and 1440 px with no horizontal overflow.
+
+### NOT done / not verified
+- **Authenticated browser QA** (five roles, responsive screenshots of the dashboard and command center): not performed.
+  It needs test accounts or a Supabase branch; creating users in the live project was not authorized.
+- Migration not dry-run on the live server (tool connection dropped); only PGlite-verified.
+- Real WooCommerce webhook, Google Apps Script, and email sending: unexecuted.

@@ -2,7 +2,7 @@ name: Verify learning hub
 on:
   pull_request:
   push:
-    branches: [codex/voice-persistent-coaching]
+    branches: [codex/voice-persistent-coaching, claude/voice-coaching-production-lwtpjk]
 permissions:
   contents: read
 jobs:
