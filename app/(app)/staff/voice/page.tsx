@@ -31,7 +31,7 @@ export default async function VoiceCommandCenter() {
   const assignmentIds = (assignments ?? []).map(a => a.id);
   const titleOf = (id: string) => assignments?.find(a => a.id === id)?.title ?? "Assignment";
 
-  const [plansRes, balancesRes, lessonsRes, subsRes, attemptsRes, inquiriesRes, testimonialsRes, waitingRes] = await Promise.all([
+  const [plansRes, balancesRes, lessonsRes, subsRes, attemptsRes, inquiriesRes, testimonialsRes, waitingRes, waivedRes] = await Promise.all([
     supabase.from("dp_coaching_plans").select("id,student_id,cadence,lesson_minutes,weekday,lesson_time,week_parity,timezone,status").eq("status", "active"),
     supabase.from("dp_package_balances").select("package_id,student_id,tier_id,installments_paid,installments_total,purchased_at,credits_total,credits_remaining,payment_status,expires_at,usable,renewed,lesson_minutes"),
     programId ? supabase.from("dp_sessions").select("id,student_id,scheduled_at,lesson_minutes,appointment_status").eq("program_id", programId).eq("appointment_status", "scheduled")
@@ -40,7 +40,8 @@ export default async function VoiceCommandCenter() {
     assignmentIds.length ? supabase.from("dp_submission_attempts").select("id,submission_id,student_id,assignment_id,attempt_no,file_urls,submitted_at").in("assignment_id", assignmentIds).order("submitted_at", { ascending: false }).limit(60) : Promise.resolve({ data: [], error: null }),
     supabase.from("dp_consultation_inquiries").select("id,full_name,email,interest,status,submitted_at,reminder_sent_at,booked_at").not("status", "in", "(enrolled,closed)").order("submitted_at"),
     supabase.from("dp_voice_testimonials").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("dp_unmatched_payments").select("id,student_id,tier_id,external_order_id,status,reason,received_at").is("resolved_at", null).order("received_at")
+    supabase.from("dp_unmatched_payments").select("id,student_id,tier_id,external_order_id,status,reason,received_at").is("resolved_at", null).order("received_at"),
+    programId ? supabase.from("dp_sessions").select("id,student_id,scheduled_at,appointment_status,waive_reason").eq("program_id", programId).eq("credit_waived", true).order("scheduled_at", { ascending: false }).limit(10) : Promise.resolve({ data: [], error: null })
   ]);
   const plans = (plansRes.data ?? []) as Plan[];
   const balances = (balancesRes.data ?? []) as Balance[];
@@ -110,6 +111,10 @@ export default async function VoiceCommandCenter() {
         {inquiries.length ? <ul className="mt-3 divide-y divide-charcoal/10">{inquiries.map(i => <li key={i.id} className="py-3"><p className="font-body text-sm"><span className="font-semibold">{i.full_name}</span> · {i.email}</p><p className="font-ui text-xs text-charcoal/60">{i.interest ? `${i.interest} · ` : ""}waiting {i.state.hoursWaiting}h · {i.state.label}</p><div className="mt-1 flex flex-wrap items-center gap-3"><ConsultationStatus id={i.id} status={i.status} />{i.state.reminderDue && <MarkReminderSent id={i.id} />}</div></li>)}</ul>
           : <p className="mt-3 font-body text-sm text-charcoal/70">No open consultation inquiries. Inquiries from the consultation form appear here once the form connection is enabled (see docs/voice-integrations.md). Visible to faculty and administrators only.</p>}</section>
     </div>
+
+    <section className="card p-5" aria-labelledby="waived-h"><h2 id="waived-h" className="font-display text-xl text-burgundy">Lessons recorded with payment waived</h2>
+      {(waivedRes.data ?? []).length ? <ul className="mt-3 divide-y divide-charcoal/10">{(waivedRes.data ?? []).map(w => <li key={w.id} className="py-2 font-body text-sm"><span className="font-semibold">{nameOf(w.student_id)}</span> · <LocalTime iso={w.scheduled_at as string} options={{ month: "short", day: "numeric", year: "numeric" }} /> · {w.appointment_status === "completed" ? "taught" : w.appointment_status === "late_cancelled" ? "late cancellation" : "missed"}<span className="block font-ui text-xs text-charcoal/70">Reason: {w.waive_reason}</span></li>)}</ul>
+        : <p className="mt-3 font-body text-sm text-charcoal/70">No lesson has been recorded without payment. A waiver always needs a reason and is listed here.</p>}</section>
 
     <section className="card p-5" aria-labelledby="unm-h"><h2 id="unm-h" className="font-display text-xl text-burgundy">Store payments waiting to be matched{waiting.length ? ` (${waiting.length})` : ""}</h2><div className="mt-3"><UnmatchedPayments waiting={waiting} plans={balances as never} nameOf={Object.fromEntries(students.map(x => [x.id, x.full_name || x.email || "Student"]))} /></div></section>
 

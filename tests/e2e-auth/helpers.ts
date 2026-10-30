@@ -4,8 +4,9 @@ import path from "node:path";
 
 export const F = JSON.parse(fs.readFileSync(path.join(__dirname, "../../testing/local-supabase/ids.json"), "utf8")) as {
   ids: Record<string, string>; password: string; users: Record<string, { email: string; name: string }>;
+  fixtures: Record<"voice" | "creative", { courseId: string; lessons: Record<"open" | "gated", { id: string; file: string }> }>;
 };
-export type Who = "voiceOnly" | "creative" | "multi" | "instructor" | "admin" | "scopedTeacher";
+export type Who = "voiceOnly" | "creative" | "multi" | "instructor" | "admin" | "scopedTeacher" | "stranger";
 export const API = "http://localhost:54321";
 export const ANON = fs.readFileSync(path.join(__dirname, "../../testing/local-supabase/anon.txt"), "utf8").trim();
 

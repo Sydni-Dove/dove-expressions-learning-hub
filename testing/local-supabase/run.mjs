@@ -19,7 +19,8 @@ export const USERS = {
   multi: { email: "multi-program@fixture.test", name: "Maya Multi" },
   instructor: { email: "instructor@fixture.test", name: "Ivy Instructor" },
   admin: { email: "admin@fixture.test", name: "Ada Admin" },
-  scopedTeacher: { email: "scoped-teacher@fixture.test", name: "Terry Teacher" }
+  scopedTeacher: { email: "scoped-teacher@fixture.test", name: "Terry Teacher" },
+  stranger: { email: "stranger@fixture.test", name: "Sam Stranger" } // signed in, enrolled in nothing
 };
 
 async function waitFor(fn, what, tries = 90) {
@@ -76,7 +77,24 @@ async function seed() {
   // The scoped teacher is a class teacher of a non-voice course only.
   const other = (await c.query("select id from dp_courses where program_id=$1 limit 1", [creative])).rows[0];
   if (other) await c.query("insert into dp_class_teachers(course_id,user_id) values ($1,$2)", [other.id, ids.scopedTeacher]);
-  fs.writeFileSync(path.join(here, "ids.json"), JSON.stringify({ ids, password: PASSWORD, users: USERS }, null, 2));
+  // Published fixture courses (local only): one in Voice, one in Creative, each with an open and a payment-gated lesson plus a private file.
+  const fixtures = {};
+  await c.query("delete from dp_courses where slug in ('fixture-voice-course','fixture-creative-course')");
+  for (const [key, programId, slug] of [["voice", voice, "fixture-voice-course"], ["creative", creative, "fixture-creative-course"]]) {
+    const area = (await c.query("select area_id from dp_programs where id=$1", [programId])).rows[0].area_id;
+    const course = (await c.query("insert into dp_courses(area_id,program_id,title,slug,is_published,access_mode) values ($1,$2,$3,$4,true,'open') returning id", [area, programId, `Fixture ${key} course`, slug])).rows[0].id;
+    const mod = (await c.query("insert into dp_modules(course_id,title,order_index) values ($1,$2,1) returning id", [course, `Fixture ${key} module`])).rows[0].id;
+    const lessons = {};
+    for (const [n, label] of [[1, "open"], [2, "gated"]]) {
+      const l = (await c.query("insert into dp_lessons(module_id,title,slug,order_index,status) values ($1,$2,$3,$4,'published') returning id", [mod, `Fixture ${key} lesson ${label}`, `fixture-${key}-lesson-${label}`, n])).rows[0].id;
+      await c.query("insert into dp_lesson_blocks(lesson_id,block_type,order_index,content) values ($1,'teaching_section',1,$2)", [l, JSON.stringify({ anchor: "intro", heading: `${key} ${label} teaching`, paragraphs: [`SECRET-${key.toUpperCase()}-${label.toUpperCase()} teaching content`] })]);
+      const up = await fetch(`${API_URL}/storage/v1/object/course-media-private/lessons/${l}/audio.mp3`, { method: "POST", headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, "content-type": "audio/mpeg", "x-upsert": "true" }, body: Buffer.alloc(512, 3) });
+      if (!up.ok) throw new Error("fixture file upload failed: " + (await up.text()));
+      lessons[label] = { id: l, file: `lessons/${l}/audio.mp3` };
+    }
+    fixtures[key] = { courseId: course, lessons };
+  }
+  fs.writeFileSync(path.join(here, "ids.json"), JSON.stringify({ ids, password: PASSWORD, users: USERS, fixtures }, null, 2));
   await c.end();
   console.log("seeded", Object.keys(ids).length, "fixture users (no real data)");
 }

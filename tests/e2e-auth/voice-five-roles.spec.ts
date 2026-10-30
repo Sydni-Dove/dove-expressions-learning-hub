@@ -12,7 +12,7 @@ const PLAN = "Week of Nov 2 – foundations";
 const REC = Buffer.concat([Buffer.from([0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32]), Buffer.alloc(2048, 7)]);
 
 test.describe("1. Login and dashboard routing", () => {
-  const expected: Record<Who, string> = { voiceOnly: "/voice", creative: "/creative-studio", multi: "/dashboard", instructor: "/dashboard", admin: "/dashboard", scopedTeacher: "/dashboard" };
+  const expected: Record<Who, string> = { voiceOnly: "/voice", creative: "/creative-studio", multi: "/dashboard", instructor: "/dashboard", admin: "/dashboard", scopedTeacher: "/dashboard", stranger: "/dashboard" };
   for (const who of Object.keys(expected) as Who[]) {
     test(`${who} lands on ${expected[who]}`, async ({ browser }) => {
       const { ctx, page } = await login(browser, who);
@@ -161,7 +161,7 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
 test.describe("3b. Existing lesson-builder assignment personalization (PR #2 feature)", () => {
   for (const who of ["instructor", "admin"] as Who[]) {
     test(`${who} personalizes an assignment for one student from a draft lesson`, async ({ browser }) => {
-      const lessons = await (await rest(who, "dp_lessons?select=id,title,dp_modules!inner(course_id,dp_courses!inner(dp_programs!inner(slug)))&dp_modules.dp_courses.dp_programs.slug=eq.vocal-coaching&limit=1")).json();
+      const lessons = await (await rest(who, "dp_lessons?select=id,title,dp_modules!inner(course_id,dp_courses!inner(dp_programs!inner(slug)))&dp_modules.dp_courses.dp_programs.slug=eq.vocal-coaching&status=eq.draft&limit=1")).json();
       const lesson = lessons[0];
       const { ctx, page } = await login(browser, who);
       await page.goto(`/staff/courses/${lesson.dp_modules.course_id}/lessons/${lesson.id}/builder`);
@@ -668,6 +668,192 @@ test.describe("10. Scheduling the whole program is separate from payment", () =>
     // the lesson leaves the "needs an outcome" list once recorded, so confirm from the record itself
     await expect.poll(async () => (await (await rest("admin", `dp_sessions?select=credit_waived,waive_reason,package_id,appointment_status&id=eq.${fifth}`)).json())[0],
       { timeout: 15000 }).toMatchObject({ credit_waived: true, waive_reason: "Complimentary make-up lesson", package_id: null, appointment_status: "completed" });
+    // and the waiver stays visible afterwards as an audit entry in the command center
+    await page.reload();
+    const audit = page.locator("section", { hasText: "Lessons recorded with payment waived" });
+    await expect(audit).toContainText("Reason: Complimentary make-up lesson");
+    await expect(audit).toContainText("Vera Voice");
     await ctx.close();
+  });
+});
+
+
+const lessonUrl = (f: { courseId: string; lessons: Record<"open" | "gated", { id: string }> }, k: "open" | "gated") => `/courses/${f.courseId}/lessons/${f.lessons[k].id}`;
+const V = F.fixtures.voice, CR = F.fixtures.creative;
+const SECRET = { voiceOpen: "SECRET-VOICE-OPEN teaching content", voiceGated: "SECRET-VOICE-GATED teaching content", creativeOpen: "SECRET-CREATIVE-OPEN teaching content" };
+const download = async (who: Who, file: string) => fetch(`${API}/storage/v1/object/authenticated/course-media-private/${file}`, { headers: { apikey: ANON, authorization: `Bearer ${await accessToken(who)}` } });
+const signUrl = async (who: Who, file: string) => fetch(`${API}/storage/v1/object/sign/course-media-private/${file}`, { method: "POST", headers: { apikey: ANON, authorization: `Bearer ${await accessToken(who)}`, "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 60 }) });
+const wooPost = async (order: object) => {
+  const body = JSON.stringify(order);
+  return fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", headers: { "content-type": "application/json", "x-wc-webhook-signature": createHmac("sha256", "local-test-webhook-secret").update(body).digest("base64") }, body });
+};
+const wooOrder = (id: number, status: string, email: string, product: number, parent = 0) => ({ id, status, parent_id: parent, billing: { email }, line_items: [{ id: id * 10, product_id: product, quantity: 1 }] });
+
+test.describe("11. Students reach only the programs they are enrolled in: direct URLs, database, files and lesson content", () => {
+  test("a voice-only student opens a voice lesson but nothing in Creative Studio", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "voiceOnly");
+    await page.goto(lessonUrl(V, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toContainText(SECRET.voiceOpen);
+    await page.goto(lessonUrl(CR, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).not.toContainText(SECRET.creativeOpen);
+    await page.goto(`/courses/${CR.courseId}`); await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).not.toContainText("Fixture creative");
+    await ctx.close();
+  });
+  test("a creative-only student cannot open a voice lesson by URL", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "creative");
+    await page.goto(lessonUrl(CR, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).toContainText(SECRET.creativeOpen);
+    await page.goto(lessonUrl(V, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.locator("body")).not.toContainText(SECRET.voiceOpen);
+    await ctx.close();
+  });
+  test("a student in both programs opens both; a signed-in stranger opens neither", async ({ browser }) => {
+    const m = await login(browser, "multi");
+    for (const [f, secret] of [[V, SECRET.voiceOpen], [CR, SECRET.creativeOpen]] as const) {
+      await m.page.goto(lessonUrl(f, "open")); await m.page.waitForLoadState("networkidle");
+      await expect(m.page.locator("body")).toContainText(secret);
+    }
+    await m.ctx.close();
+    const x = await login(browser, "stranger");
+    for (const [f, secret] of [[V, SECRET.voiceOpen], [CR, SECRET.creativeOpen]] as const) {
+      await x.page.goto(lessonUrl(f, "open")); await x.page.waitForLoadState("networkidle");
+      await expect(x.page.locator("body")).not.toContainText(secret);
+    }
+    for (const p of ["/voice", "/voice/resources", "/creative-studio", "/staff/voice"]) { await x.page.goto(p); await x.page.waitForLoadState("networkidle"); expect(new URL(x.page.url()).pathname, p).toBe("/dashboard"); }
+    await x.ctx.close();
+  });
+  test("database rows, lesson content and private files follow enrollment for every role", async () => {
+    const rows = async (who: Who, table: string, filter: string) => (await (await rest(who, `${table}?select=id&${filter}`)).json()) as unknown[];
+    const matrix: [Who, boolean, boolean][] = [["voiceOnly", true, false], ["creative", false, true], ["multi", true, true], ["stranger", false, false], ["instructor", true, true], ["admin", true, true]];
+    for (const [who, seesVoice, seesCreative] of matrix) {
+      for (const [f, expected, label] of [[V, seesVoice, "voice"], [CR, seesCreative, "creative"]] as const) {
+        const n = expected ? 1 : 0;
+        expect((await rows(who, "dp_courses", `id=eq.${f.courseId}`)).length, `${who} ${label} course`).toBe(n);
+        expect((await rows(who, "dp_lessons", `id=eq.${f.lessons.open.id}`)).length, `${who} ${label} lesson`).toBe(n);
+        expect((await rows(who, "dp_lesson_blocks", `lesson_id=eq.${f.lessons.open.id}`)).length, `${who} ${label} teaching content`).toBe(n);
+        const dl = await download(who, f.lessons.open.file); const sg = await signUrl(who, f.lessons.open.file);
+        expect(dl.status === 200, `${who} downloads ${label} file`).toBe(expected);
+        expect(sg.status < 300, `${who} signs ${label} file`).toBe(expected);
+      }
+    }
+    // signed-out visitors get nothing at all
+    const anon = await (await fetch(`${API}/rest/v1/dp_lesson_blocks?select=id`, { headers: { apikey: ANON } })).json();
+    expect(Array.isArray(anon) ? anon.length : 0).toBe(0);
+    expect((await fetch(`${API}/storage/v1/object/public/course-media-private/${V.lessons.open.file}`)).status).toBeGreaterThanOrEqual(400);
+  });
+});
+
+test.describe("12. Full lesson workflow: assign, practise, submit, feedback, and progress that persists", () => {
+  const TITLE = "Lesson practice (workflow)";
+  test("the instructor personalizes practice for one student on a published lesson", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto(`/staff/courses/${V.courseId}/lessons/${V.lessons.open.id}/builder`);
+    await page.getByRole("button", { name: "+ Assign practice" }).click();
+    await page.getByLabel("Student").selectOption({ label: F.users.voiceOnly.name });
+    await page.getByLabel("Title").fill(TITLE);
+    await page.getByLabel("Guided practice steps (one per line)").fill("Gentle hum on one comfortable note\nSing the first line twice");
+    await page.getByRole("button", { name: "Save assignment" }).click();
+    await expect(page.getByText(TITLE)).toBeVisible();
+    await ctx.close();
+  });
+  test("the student sees it from the lesson, saves progress that survives a reload, and submits", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "voiceOnly");
+    await page.goto(lessonUrl(V, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.getByText(SECRET.voiceOpen)).toBeVisible();
+    await page.getByRole("link", { name: TITLE }).first().click();
+    await page.waitForURL(/\/assignments/);
+    const card = page.locator("article", { hasText: TITLE });
+    await card.getByRole("checkbox", { name: /Gentle hum/ }).check();
+    await card.getByLabel("Practice minutes").fill("8");
+    await card.getByLabel("Practice reflection").fill("The hum felt easy.");
+    await card.getByRole("button", { name: "Save progress" }).click();
+    await expect(card.getByRole("status")).toContainText("Progress saved");
+    await page.reload();
+    const again = page.locator("article", { hasText: TITLE });
+    await expect(again.getByRole("checkbox", { name: /Gentle hum/ })).toBeChecked();
+    await expect(again.getByLabel("Practice reflection")).toHaveValue("The hum felt easy.");
+    await again.getByRole("checkbox", { name: /Sing the first line/ }).check();
+    await again.getByRole("button", { name: "Submit practice" }).click();
+    await expect(again.getByRole("status")).toContainText("Practice submitted");
+    // the student cannot mark a Voice lesson complete themselves
+    const forced = await rest("voiceOnly", "dp_lesson_progress", { method: "POST", body: JSON.stringify({ user_id: F.ids.voiceOnly, lesson_id: V.lessons.open.id, status: "completed", completion_method: "student_marked" }) });
+    expect(forced.status).toBeGreaterThanOrEqual(400);
+    await ctx.close();
+  });
+  test("the instructor reviews it privately, shares feedback and approves", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice");
+    await page.getByRole("heading", { name: "Assignments awaiting review" }).locator("..").getByRole("link", { name: TITLE }).click();
+    await page.getByLabel("Private note").fill("INSTRUCTOR-ONLY: confident start.");
+    await page.getByRole("button", { name: "Save private note" }).click();
+    await expect(page.getByText("Private note saved")).toBeVisible();
+    await page.getByLabel("Feedback shared with the student").fill("Lovely, relaxed hum. Keep the same ease on the line.");
+    await page.getByLabel("Update status to").selectOption("approved");
+    await page.getByRole("button", { name: "Send feedback" }).click();
+    await expect(page.getByText("Lovely, relaxed hum.")).toBeVisible();
+    await ctx.close();
+  });
+  test("a brand new session still shows the feedback, the approved work and the completed lesson", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "voiceOnly");
+    await page.goto("/assignments");
+    const card = page.locator("article", { hasText: TITLE });
+    await expect(card.getByText("Approved by your instructor.")).toBeVisible();
+    await expect(card.getByText("Lovely, relaxed hum.")).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("INSTRUCTOR-ONLY");
+    await page.goto(lessonUrl(V, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.getByText("Teaching complete").first()).toBeVisible();
+    const progress = await (await rest("voiceOnly", `dp_lesson_progress?select=status,completion_method&lesson_id=eq.${V.lessons.open.id}`)).json();
+    expect(progress).toEqual([{ status: "completed", completion_method: "instructor_review" }]);
+    await ctx.close();
+  });
+});
+
+test.describe("13. Locked lessons follow payments and refunds never delete records", () => {
+  const email = F.users.voiceOnly.email;
+  test("the instructor sets the gated lesson to open after eight paid lessons", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice/packages");
+    const input = page.getByLabel("Paid lessons needed for Fixture voice lesson gated");
+    await input.fill("8"); await input.blur();
+    await expect(page.getByRole("status").filter({ hasText: "Access updated" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Paid lessons needed for Fixture voice lesson gated")).toHaveValue("8");
+    await ctx.close();
+  });
+  test("payment 1 (4 lessons) leaves it locked: closed page, no content, no file", async ({ browser }) => {
+    expect((await wooPost(wooOrder(7500, "completed", email, 9002))).status).toBe(200);
+    const { ctx, page } = await login(browser, "voiceOnly");
+    await page.goto(lessonUrl(V, "gated")); await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "This lesson is not open yet" })).toBeVisible();
+    await expect(page.getByRole("status")).toContainText("opens once 8 lessons of your package are paid for");
+    await expect(page.getByRole("status")).toContainText("Right now 4 are unlocked");
+    await expect(page.locator("body")).not.toContainText(SECRET.voiceGated);
+    expect(await (await rest("voiceOnly", `dp_lesson_blocks?select=id&lesson_id=eq.${V.lessons.gated.id}`)).json()).toEqual([]);
+    expect((await download("voiceOnly", V.lessons.gated.file)).status).toBeGreaterThanOrEqual(400);
+    expect((await signUrl("voiceOnly", V.lessons.gated.file)).status).toBeGreaterThanOrEqual(400);
+    // the ungated lesson, its progress and the assignment feedback from section 12 are untouched
+    await page.goto(lessonUrl(V, "open")); await page.waitForLoadState("networkidle");
+    await expect(page.getByText(SECRET.voiceOpen)).toBeVisible();
+    await ctx.close();
+  });
+  test("payment 2 (8 lessons) opens it; a refund closes it again; nothing is deleted", async ({ browser }) => {
+    expect((await wooPost(wooOrder(7501, "completed", email, 9002, 7500))).status).toBe(200);
+    const open = await login(browser, "voiceOnly");
+    await open.page.goto(lessonUrl(V, "gated")); await open.page.waitForLoadState("networkidle");
+    await expect(open.page.getByText(SECRET.voiceGated)).toBeVisible();
+    expect((await download("voiceOnly", V.lessons.gated.file)).status).toBe(200);
+    expect((await wooPost(wooOrder(7501, "refunded", email, 9002, 7500))).status).toBe(200);
+    await open.page.goto(lessonUrl(V, "gated")); await open.page.waitForLoadState("networkidle");
+    await expect(open.page.getByRole("heading", { name: "This lesson is not open yet" })).toBeVisible();
+    await expect(open.page.locator("body")).not.toContainText(SECRET.voiceGated);
+    // records preserved: approved work, shared feedback, completed lesson progress, and the private note stays hidden
+    await open.page.goto("/assignments");
+    await expect(open.page.locator("article", { hasText: "Lesson practice (workflow)" }).getByText("Approved by your instructor.")).toBeVisible();
+    await expect(open.page.locator("article", { hasText: "Lesson practice (workflow)" }).getByText("Lovely, relaxed hum.")).toBeVisible();
+    expect(await (await rest("voiceOnly", `dp_lesson_progress?select=status&lesson_id=eq.${V.lessons.open.id}`)).json()).toEqual([{ status: "completed" }]);
+    await open.ctx.close();
+    const admin = await (await rest("admin", `dp_feedback?select=content,is_private&is_private=eq.true`)).json();
+    expect(admin.some((f: { content: string }) => /INSTRUCTOR-ONLY/.test(f.content))).toBe(true);
   });
 });
