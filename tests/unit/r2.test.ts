@@ -48,6 +48,7 @@ describe("r2 config and limits", () => {
     expect(checkUpload({ contentType: "audio/mp4", size: 1000, durationSeconds: 16 * 60 })).toMatch(/15 minutes/);
     expect(checkUpload({ contentType: "audio/webm;codecs=opus", size: 1000, durationSeconds: 200 })).toBeNull();
     expect(recordingLimits({ RECORDING_MAX_MB: "20" }).maxBytes).toBe(20 * 1048576);
+    expect(recordingLimits({})).toMatchObject({ recommendedMinMinutes: 3, recommendedMinutes: 5, warnMinutes: 8, maxMinutes: 15 });
     expect(durationAdvice(60)).toBe("ok");
     expect(durationAdvice(9 * 60)).toBe("long");
     expect(durationAdvice(16 * 60)).toBe("too_long");

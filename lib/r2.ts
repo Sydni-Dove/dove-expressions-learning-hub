@@ -12,6 +12,7 @@ export function recordingLimits(env: Record<string, string | undefined> = proces
   const num = (v: string | undefined, d: number) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
   return {
     maxBytes: num(env.RECORDING_MAX_MB, 50) * 1024 * 1024,
+    recommendedMinMinutes: num(env.RECORDING_RECOMMENDED_MIN_MINUTES, 3),
     recommendedMinutes: num(env.RECORDING_RECOMMENDED_MINUTES, 5),
     warnMinutes: num(env.RECORDING_WARN_MINUTES, 8),
     maxMinutes: num(env.RECORDING_MAX_MINUTES, 15),

@@ -28,7 +28,7 @@ export default async function MyPracticeRecordings() {
         <p className="mt-2 max-w-2xl font-body text-[#4a3a3a]">Only you and your Voice instructor can hear these. Save a recording privately first, then submit it when you want feedback. Submitted recordings and feedback are never overwritten.</p>
       </header>
       <RecordingLibrary recordings={recordings as RecordingRow[]} assignments={(asg ?? []).map((a) => ({ id: a.id, title: a.title, lessonId: a.lesson_id }))}
-        limits={{ recommendedMinutes: l.recommendedMinutes, warnMinutes: l.warnMinutes, maxMinutes: l.maxMinutes, maxMb: Math.round(l.maxBytes / 1048576) }} />
+        limits={{ recommendedMinMinutes: l.recommendedMinMinutes, recommendedMinutes: l.recommendedMinutes, warnMinutes: l.warnMinutes, maxMinutes: l.maxMinutes, maxMb: Math.round(l.maxBytes / 1048576) }} />
     </div>
   );
 }

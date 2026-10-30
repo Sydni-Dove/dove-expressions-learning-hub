@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDuration, listPending, pickRecorderType, removePending, savePending, uploadWithProgress, type PendingTake } from "@/lib/recording-client";
 
 export const LABELS = ["Verse", "Chorus", "Bridge", "Warmup", "Pitch exercise", "Breath exercise", "Song", "Personal practice", "Other"];
-export interface Limits { recommendedMinutes: number; warnMinutes: number; maxMinutes: number; maxMb: number }
+export interface Limits { recommendedMinMinutes: number; recommendedMinutes: number; warnMinutes: number; maxMinutes: number; maxMb: number }
 export interface AssignmentOption { id: string; title: string; lessonId: string | null }
 
 type Phase = "idle" | "recording" | "ready" | "uploading" | "failed" | "saved";
@@ -131,7 +131,7 @@ export default function PracticeRecorder({ assignments, limits, initialAssignmen
   return (
     <section aria-labelledby="record-heading" className="rounded-2xl border border-[#630000]/15 bg-white p-4 sm:p-6">
       <h2 id="record-heading" className="font-display text-2xl text-[#630000]">{reviseOf ? "Record a revised take" : "Record or upload"}</h2>
-      <p className="mt-1 font-body text-sm text-[#4a3a3a]">Aim for {limits.recommendedMinutes} minutes or less. Several short recordings are better than one long one — save each part separately.</p>
+      <p className="mt-1 font-body text-sm text-[#4a3a3a]">We recommend recording in {limits.recommendedMinMinutes}–{limits.recommendedMinutes} minute segments. You can save several segments for one assignment (Part 1, Part 2, …); each is saved and reviewed on its own.</p>
       {!online && <p role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 font-ui text-sm text-amber-900">You are offline. You can still record; uploads will wait until you are connected.</p>}
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {!reviseOf && (

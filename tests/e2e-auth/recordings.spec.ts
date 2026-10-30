@@ -32,6 +32,7 @@ test.describe.serial("private practice recording library", () => {
     const { ctx, page } = await login(browser, "voiceOnly");
     await page.goto("/voice/recordings");
     await expect(page.getByRole("heading", { name: "My Practice Recordings" })).toBeVisible();
+    await expect(page.getByText("We recommend recording in 3–5 minute segments")).toBeVisible();
     await page.getByLabel("Assignment").selectOption({ label: "Recording fixture: breath" });
     await pickAndSave(page, "verse.wav", "Verse", 1);
     await pickAndSave(page, "chorus.wav", "Chorus", 2);
