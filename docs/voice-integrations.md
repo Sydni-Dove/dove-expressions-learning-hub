@@ -38,9 +38,9 @@ the same email they use at checkout (otherwise WooCommerce shows a failed delive
 
 > **Price note (October 30, owner correction).** An October 30 message described a 65-minute lesson at $60. That was a mistake and is **withdrawn**:
 > the lesson is **60 minutes**, and the single 60-minute lesson is **$65**. The Hub supports 45- and 60-minute lessons only (65 was never kept).
-> **Still to confirm:** the monthly and 12-week prices at 60 minutes. The October 29 decision was **$248** (monthly) and **$720 = 3 x $240** (12-week);
-> the withdrawn October 30 message listed $232 and $690 = 3 x $230. The tables below use the October 29 figures until you confirm. The Hub stores no
-> prices (WooCommerce owns them), so nothing in the software depends on this choice.
+> **Confirmed (latest owner message):** single lesson = **60 minutes for $65**. **Recommended** monthly (four 60-min lessons) **$248** and 12-week
+> **$720 = three payments of $240**, *pending final business approval*. The $232 / $690 figures are withdrawn. The Hub stores no prices
+> (WooCommerce owns them), so nothing in the software depends on this choice, and no store price has been changed.
 
 ### Packages are configured in the Hub (staff > Voice > Packages)
 Each package defines: lesson count, lesson length (45 or 60), expiry, a library access level, whether it includes a personalized
