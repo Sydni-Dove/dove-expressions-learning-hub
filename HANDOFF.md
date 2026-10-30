@@ -131,7 +131,8 @@ login and signup pages checked at 390, 820 and 1440 px with no horizontal overfl
 ## October 29 evening update: finalized pricing, student resource area, configurable packages, authenticated testing
 
 ### Direction from the owner
-Final prices (store is the source of truth; nothing in WooCommerce was changed): single lesson $45/45 min and $65/60 min;
+**(SUPERSEDED October 30: the 60-minute offering became a 65-minute lesson; see the October 30 section below.)** Prices as decided October 29
+(store is the source of truth; nothing in WooCommerce was changed): single lesson $45/45 min and $65/60 min;
 monthly four weekly lessons $172/45 and $248/60 (one-time, no auto-renewal); 12-week coaching $504 (3 x $168)/45 and $720
 (3 x $240)/60; annual is future only; no 3- or 6-lesson bundles. Keep the Vocal Development Program and curriculum unpublished and
 do not advertise anything not yet built. Priority for current paying students: a simple resource area.
@@ -188,8 +189,22 @@ pages (they see no data) but cannot review course-less weekly-plan homework (onl
 taught needs a paid, unlocked lesson or a waiver with a reason (enforced in the database); teaching content (not lesson rows) is gated by package
 level and/or paid-lesson count. 3. Refunds restrict access only; completed lessons, assignments, feedback, progress and notes are preserved (tested).
 4. Public testimonial page stays unlisted and noindex; a live iframe embed and a no-store JSON feed exist for the website; withdrawal removes the
-review from every surface; external copies cannot be withdrawn (documented). 5. Prices: $504 (3 x $168) and $720 (3 x $240); store untouched.
+review from every surface; external copies cannot be withdrawn (documented). 5. Prices (October 29 version, superseded October 30): $504 (3 x $168) and $720 (3 x $240); store untouched.
 6. Payment attribution: reference-based matching (order meta `dove_plan_order` or parent order), unmatched payments queue for a person, optional single-open-plan
 shortcut per package (off by default). 7. Migrations and deployment remain on hold until the hosted-project smoke test and final release review.
 
 Browser suite: 52 tests passing on the local stack (40 role/flow, 12 responsive). Database tests, unit tests, type check, lint and production build pass.
+
+
+## October 30 update: revised pricing, 65-minute lesson replaces 60-minute (PR #3, still a draft)
+**Final pricing:** single 45 min $45; single 65 min $60; monthly four 45 min $172; monthly four 65 min $232 (one-time, no auto-renewal);
+12-week 45 min $504 (3 x $168); 12-week 65 min $690 (3 x $230). The Hub stores no prices (WooCommerce owns them), so no price calculation changed.
+**Changed:** lesson lengths offered for new packages, schedules and renewals are now 45 and 65 (UI selects, defaults, placeholders); database
+length checks accept 45, 60 and 65 (60 retained only so earlier records stay valid); renewal link by length (`renewalLink`: 45 and earlier-60 use the existing
+booking pages; 65 uses `NEXT_PUBLIC_BOOKING_URL_65` when set, otherwise "Message your instructor"); tests, `docs/voice-integrations.md` price tables and
+store audit; a "keep earlier 60-minute offering" option on the package form so in-flight 60-minute payment plans can keep mapping to their store product.
+**Preserved unchanged:** installment unlocking (4, 8, 12), payment matching by reference and the unmatched queue, waivers, scheduling across the program,
+refund behaviour, testimonial consent/withdrawal/embed logic. **Existing purchases:** the Hub holds none (migrations unapplied, no tier seeded); any 60-minute
+purchase recorded later keeps its length, lessons, expiry and payments (snapshot), never mixes with 65-minute credits, and is not altered by package edits.
+Store orders are untouched. **Owner/store actions still needed:** create 65-minute products and a 65-minute booking schedule/page; keep old 60-minute products
+mapped while payment plans are in flight; correct nothing else in the store until you approve. Migrations and deployment remain on hold.

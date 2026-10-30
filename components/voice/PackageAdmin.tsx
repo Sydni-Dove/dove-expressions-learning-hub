@@ -18,9 +18,9 @@ const Note = ({ error, ok }: { error: string; ok: string }) => <>{error && <p ro
 
 export function TierManager({ programId, tiers }: { programId: string; tiers: Tier[] }) {
   const { busy, error, ok, run } = useAct();
-  const blank = { name: "", description: "", minutes: "60", count: "4", days: "", pay: "1", loose: false, level: "0", plan: false, assess: "0", feedback: "0", products: "" };
-  const [f, setF] = useState(blank); const [edit, setEdit] = useState<Tier | null>(null);
-  const load = (t: Tier | null) => { setEdit(t); setF(t ? { name: t.name, description: t.description ?? "", minutes: String(t.lesson_minutes), count: String(t.lesson_count), days: t.valid_days ? String(t.valid_days) : "", pay: String(t.installments), loose: t.allow_unreferenced_match, level: String(t.resource_level), plan: t.personal_plan, assess: String(t.assessments_included), feedback: String(t.recording_feedback_included), products: t.woo_product_ids.join(", ") } : blank); };
+  const blank = { name: "", description: "", minutes: "65", count: "4", days: "", pay: "1", loose: false, level: "0", plan: false, assess: "0", feedback: "0", products: "" };
+  const [f, setF] = useState(blank); const [edit, setEdit] = useState<Tier | null>(null); const [legacy, setLegacy] = useState(false);
+  const load = (t: Tier | null) => { setEdit(t); setLegacy(t?.lesson_minutes === 60); setF(t ? { name: t.name, description: t.description ?? "", minutes: String(t.lesson_minutes), count: String(t.lesson_count), days: t.valid_days ? String(t.valid_days) : "", pay: String(t.installments), loose: t.allow_unreferenced_match, level: String(t.resource_level), plan: t.personal_plan, assess: String(t.assessments_included), feedback: String(t.recording_feedback_included), products: t.woo_product_ids.join(", ") } : blank); };
   const submit = (ev: React.FormEvent) => { ev.preventDefault(); run(async () => {
     if (!f.name.trim()) throw new Error("Give the package a name.");
     const products = f.products.split(/[,\s]+/).filter(Boolean);
@@ -36,9 +36,10 @@ export function TierManager({ programId, tiers }: { programId: string; tiers: Ti
   return <div className="space-y-4">
     <form onSubmit={submit} className="card grid gap-3 p-5 sm:grid-cols-2">
       <h3 className="font-display text-lg text-burgundy sm:col-span-2">{edit ? "Edit package" : "Create a package"}</h3>
-      <label className="font-ui text-sm">Name<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} className={field} placeholder="Monthly, four 60-minute lessons" /></label>
+      <label className="font-ui text-sm">Name<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} className={field} placeholder="Monthly, four 65-minute lessons" /></label>
       <label className="font-ui text-sm">Store product IDs (comma separated)<input value={f.products} onChange={e => setF({ ...f, products: e.target.value })} className={field} placeholder="Leave blank until prices are final" /></label>
-      <label className="font-ui text-sm">Lesson length<select value={f.minutes} onChange={e => setF({ ...f, minutes: e.target.value })} className={field}><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label>
+      <label className="font-ui text-sm">Lesson length<select value={f.minutes} onChange={e => setF({ ...f, minutes: e.target.value })} className={field}><option value="45">45 minutes</option><option value="65">65 minutes</option>{(legacy || f.minutes === "60") && <option value="60">60 minutes (earlier offering)</option>}</select></label>
+      <label className="flex items-start gap-2 font-ui text-sm sm:col-span-2"><input type="checkbox" className="mt-1" checked={legacy} onChange={e => { setLegacy(e.target.checked); if (!e.target.checked && f.minutes === "60") setF({ ...f, minutes: "65" }); }} /><span>This keeps an earlier 60-minute offering working for students who already bought it (for example payments still due). Do not use it for new sales.</span></label>
       <label className="font-ui text-sm">Number of lessons<input type="number" min={1} max={200} value={f.count} onChange={e => setF({ ...f, count: e.target.value })} className={field} /></label>
       <label className="font-ui text-sm">Lessons expire after (days, blank = never)<input type="number" min={1} max={1095} value={f.days} onChange={e => setF({ ...f, days: e.target.value })} className={field} /></label>
       <label className="font-ui text-sm">Number of payments in the store<input type="number" min={1} max={12} value={f.pay} onChange={e => setF({ ...f, pay: e.target.value })} className={field} /><span className="mt-1 block font-body text-xs text-charcoal/60">With more than one, lessons unlock in proportion to payments received (12 lessons over 3 payments: 4, 8, then 12).</span></label>

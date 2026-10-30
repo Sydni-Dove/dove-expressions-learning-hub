@@ -91,13 +91,13 @@ describe("schedule, capacity and credits", () => {
      select '${student}',id,'${T}','${cadence}',${minutes},${base}+${dayOffset + week * 7},'${time}','America/Chicago' from dp_programs where slug='vocal-coaching'`;
 
   it("rejects overlapping slots but lets two biweekly students alternate weeks", async () => {
-    await q(ADMIN, plan(A, "weekly", 60, 0, 0, "10:00"));
-    await denied(ADMIN, plan(B, "weekly", 45, 0, 0, "10:30")); // overlaps 10:00-11:00
+    await q(ADMIN, plan(A, "weekly", 65, 0, 0, "10:00"));
+    await denied(ADMIN, plan(B, "weekly", 45, 0, 0, "11:00")); // overlaps the 65-minute lesson (10:00-11:05)
     await denied(ADMIN, plan(B, "biweekly", 45, 0, 1, "10:30")); // weekly owns every week
-    await q(ADMIN, plan(B, "weekly", 45, 0, 0, "11:00")); // adjacent is fine
-    await q(ADMIN, plan(D, "biweekly", 60, 1, 0, "14:00"));
-    await q(ADMIN, plan(E, "biweekly", 60, 1, 1, "14:00")); // opposite week: shares the position
-    await denied(ADMIN, plan(C, "biweekly", 60, 1, 2, "14:00")); // same parity as D (and C is not enrolled)
+    await q(ADMIN, plan(B, "weekly", 45, 0, 0, "11:15")); // starts after the 65-minute lesson ends at 11:05
+    await q(ADMIN, plan(D, "biweekly", 65, 1, 0, "14:00"));
+    await q(ADMIN, plan(E, "biweekly", 65, 1, 1, "14:00")); // opposite week: shares the position
+    await denied(ADMIN, plan(C, "biweekly", 65, 1, 2, "14:00")); // same parity as D (and C is not enrolled)
     const { rows } = await db.query<any>(`select student_id,week_parity from dp_coaching_plans where cadence='biweekly' order by week_parity`);
     expect(rows.map((r: any) => r.week_parity)).toEqual([0, 1]);
     await denied(ADMIN, plan(C, "weekly", 45, 3, 0, "09:00")); // not enrolled
@@ -132,9 +132,9 @@ describe("schedule, capacity and credits", () => {
   it("consumes credits only for completed, late-cancelled and missed lessons within paid, unexpired packages", async () => {
     const prog = `(select id from dp_programs where slug='vocal-coaching')`;
     await q(ADMIN, `insert into dp_coaching_packages(id,student_id,program_id,lesson_minutes,credits_total,payment_status,expires_at) values
-      ('${id(71)}','${A}',${prog},60,2,'paid',now()+interval '30 days'),
-      ('${id(72)}','${A}',${prog},60,5,'pending',null),
-      ('${id(73)}','${A}',${prog},60,5,'paid',now()-interval '1 day'),
+      ('${id(71)}','${A}',${prog},65,2,'paid',now()+interval '30 days'),
+      ('${id(72)}','${A}',${prog},65,5,'pending',null),
+      ('${id(73)}','${A}',${prog},65,5,'paid',now()-interval '1 day'),
       ('${id(74)}','${A}',${prog},45,5,'paid',null)`);
     const lessons = (await db.query<any>(`select id from dp_sessions where student_id='${A}' and appointment_status='scheduled' order by scheduled_at limit 3`)).rows.map((r: any) => r.id);
     await q(T, `select dp_set_lesson_status('${lessons[0]}','completed')`);
@@ -158,7 +158,7 @@ describe("schedule, capacity and credits", () => {
   it("gives students a safe overview and nothing about other students", async () => {
     const mine = (await q(A, `select dp_my_coaching_overview('vocal-coaching') o`)).rows[0].o;
     expect(mine.plan.cadence).toBe("weekly");
-    expect(mine.credits_by_minutes).toEqual({ "45": 5, "60": 1 });
+    expect(mine.credits_by_minutes).toEqual({ "45": 5, "65": 1 });
     expect(mine.upcoming.length).toBeGreaterThan(0);
     expect(JSON.stringify(mine)).not.toMatch(/private|notes/i);
     expect((await q(C, `select dp_my_coaching_overview('vocal-coaching') o`)).rows[0].o).toBeNull();
@@ -166,18 +166,18 @@ describe("schedule, capacity and credits", () => {
     expect(other.credits_by_minutes).toEqual({});
     expect(other.packages).toEqual([]);
     expect((await q(B, `select count(*)::int n from dp_coaching_packages`)).rows[0].n).toBe(0);
-    await denied(A, `insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status) select '${A}',id,60,99,'paid' from dp_programs where slug='vocal-coaching'`);
+    await denied(A, `insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status) select '${A}',id,65,99,'paid' from dp_programs where slug='vocal-coaching'`);
   });
   it("records WooCommerce purchases from configurable tiers, idempotently, service role only", async () => {
     await q(ADMIN, `insert into dp_coaching_tiers(id,program_id,slug,name,lesson_minutes,lesson_count,valid_days,resource_level,personal_plan,assessments_included,recording_feedback_included,woo_product_ids)
-      select '${TIER}',id,'guided','Guided',60,4,90,2,true,1,3,array['2001'] from dp_programs where slug='vocal-coaching'`);
+      select '${TIER}',id,'guided','Guided',65,4,90,2,true,1,3,array['2001'] from dp_programs where slug='vocal-coaching'`);
     const call = (order: string, status: string, who = "service_role", qty = 1) =>
       db.exec(`set role ${who}`).then(() => db.query<any>(`select dp_record_package_purchase('${D}','${TIER}',${qty},'${order}','1','wc-product-2001','${status}') id`))
         .finally(() => db.exec("reset role"));
     const first = (await call("1001", "pending")).rows[0].id;
     expect((await call("1001", "paid")).rows[0].id).toBe(first);
     const row = (await db.query<any>(`select payment_status,credits_total,lesson_minutes,tier_name,resource_level,personal_plan,assessments_included,recording_feedback_included,expires_at is not null exp from dp_coaching_packages where id='${first}'`)).rows[0];
-    expect(row).toMatchObject({ payment_status: "paid", credits_total: 4, lesson_minutes: 60, tier_name: "Guided", resource_level: 2, personal_plan: true, assessments_included: 1, recording_feedback_included: 3, exp: true });
+    expect(row).toMatchObject({ payment_status: "paid", credits_total: 4, lesson_minutes: 65, tier_name: "Guided", resource_level: 2, personal_plan: true, assessments_included: 1, recording_feedback_included: 3, exp: true });
     const second = (await call("1002", "paid", "service_role", 2)).rows[0].id;
     expect((await db.query<any>(`select renewal_of,credits_total,assessments_included from dp_coaching_packages where id='${second}'`)).rows[0]).toMatchObject({ renewal_of: first, credits_total: 8, assessments_included: 2 });
     expect((await db.query<any>(`select count(*)::int n from dp_coaching_packages where external_order_id='1001'`)).rows[0].n).toBe(1);
@@ -188,7 +188,7 @@ describe("schedule, capacity and credits", () => {
   it("never lets a first installment unlock all twelve lessons (12 lessons over 3 payments)", async () => {
     const T3 = id(92);
     await q(ADMIN, `insert into dp_coaching_tiers(id,program_id,slug,name,lesson_minutes,lesson_count,installments,woo_product_ids)
-      select '${T3}',id,'twelve-week','12-week',60,12,3,array['2002'] from dp_programs where slug='vocal-coaching'`);
+      select '${T3}',id,'twelve-week','12-week',65,12,3,array['2002'] from dp_programs where slug='vocal-coaching'`);
     const buy = (student: string, order: string, status: string, qty = 1, ref: string | null = null) =>
       db.exec("set role service_role").then(() => db.query<any>(`select dp_record_package_purchase('${student}','${T3}',${qty},'${order}','1','wc-product-2002','${status}',${ref ? `'${ref}'` : "null"}) id`)).finally(() => db.exec("reset role"));
     const snap = async (pid: string) => (await db.query<any>(`select payment_status,installments_paid,installments_total,credits_total,credits_unlocked,credits_remaining,usable from dp_package_balances where package_id='${pid}'`)).rows[0];
@@ -203,7 +203,7 @@ describe("schedule, capacity and credits", () => {
     expect((await snap(pid)).installments_paid).toBe(1);
     // The whole program can be scheduled, but a lesson cannot be recorded as taught without a paid, unlocked lesson.
     for (let i = 0; i < 6; i++) await db.exec(`insert into dp_sessions(student_id,mentor_id,program_id,scheduled_at,lesson_minutes,appointment_status)
-      select '${B}','${T}',id,now()-interval '${6 - i} days',60,'scheduled' from dp_programs where slug='vocal-coaching'`);
+      select '${B}','${T}',id,now()-interval '${6 - i} days',65,'scheduled' from dp_programs where slug='vocal-coaching'`);
     const ids = (await db.query<any>(`select id from dp_sessions where student_id='${B}' and plan_id is null order by scheduled_at`)).rows.map((r: any) => r.id);
     expect(ids).toHaveLength(6);
     for (const sid of ids.slice(0, 4)) await q(T, `select dp_set_lesson_status('${sid}','completed')`);
@@ -425,6 +425,53 @@ describe("installment payment attribution (never guess)", () => {
     expect((await buy(A, "3203")).rows[0].id).toBe(open);
     expect(await attribution("3203")).toBe("sequential");
     await q(ADMIN, `update dp_coaching_tiers set allow_unreferenced_match=false where id='${T3}'`);
+  });
+});
+
+describe("lesson lengths: current offering is 45 and 65; earlier 60-minute records stay valid and untouched", () => {
+  const LEG = id(141), TIER65 = id(142), TIER45 = id(143);
+  const prog = `(select id from dp_programs where slug='vocal-coaching')`;
+  it("accepts 45, 65 and earlier 60-minute records and rejects any other length", async () => {
+    for (const m of [30, 50, 90]) {
+      await denied(ADMIN, `insert into dp_coaching_tiers(program_id,slug,name,lesson_minutes,lesson_count) select id,'bad${m}','Bad',${m},1 from dp_programs where slug='vocal-coaching'`);
+      await expect(db.exec(`insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total) select '${E}',id,${m},1 from dp_programs where slug='vocal-coaching'`)).rejects.toThrow();
+      await expect(db.exec(`insert into dp_sessions(student_id,mentor_id,program_id,lesson_minutes,appointment_status) select '${E}','${T}',id,${m},'scheduled' from dp_programs where slug='vocal-coaching'`)).rejects.toThrow();
+    }
+    for (const m of [45, 60, 65]) await db.exec(`insert into dp_coaching_tiers(program_id,slug,name,lesson_minutes,lesson_count,is_active) select id,'len${m}','Len ${m}',${m},1,false from dp_programs where slug='vocal-coaching'`);
+  });
+  it("keeps an existing 60-minute purchase exactly as agreed when new 65-minute packages are added", async () => {
+    await db.exec(`insert into dp_coaching_packages(id,student_id,program_id,lesson_minutes,credits_total,payment_status,expires_at,tier_name,purchased_at)
+      select '${LEG}','${E}',id,60,4,'paid','2027-03-01T00:00:00Z','Monthly, four 60-minute lessons (earlier offering)','2026-10-01T00:00:00Z' from dp_programs where slug='vocal-coaching'`);
+    const snapshot = async () => (await db.query<any>(`select lesson_minutes,credits_total,payment_status,expires_at,tier_name,purchased_at,installments_total,installments_paid from dp_coaching_packages where id='${LEG}'`)).rows[0];
+    const before = await snapshot();
+    await q(ADMIN, `insert into dp_coaching_tiers(id,program_id,slug,name,lesson_minutes,lesson_count) select '${TIER65}',id,'monthly-65','Monthly 65',65,4 from dp_programs where slug='vocal-coaching'`);
+    await q(ADMIN, `select dp_create_package('${E}','${TIER65}','paid')`);
+    expect(await snapshot()).toEqual(before);
+    // lessons and credits match on exact length: a 65-minute lesson never draws on the 60-minute purchase, and vice versa
+    const lesson = async (m: number) => { const r = await db.query<any>(`insert into dp_sessions(student_id,mentor_id,program_id,scheduled_at,lesson_minutes,appointment_status) select '${E}','${T}',id,now()-interval '1 hour',${m},'scheduled' from dp_programs where slug='vocal-coaching' returning id`); return r.rows[0].id; };
+    const l60 = await lesson(60); await q(T, `select dp_set_lesson_status('${l60}','completed')`);
+    expect((await db.query<any>(`select package_id from dp_sessions where id='${l60}'`)).rows[0].package_id).toBe(LEG);
+    const l65 = await lesson(65); await q(T, `select dp_set_lesson_status('${l65}','completed')`);
+    expect((await db.query<any>(`select package_id from dp_sessions where id='${l65}'`)).rows[0].package_id).not.toBe(LEG);
+    const bal = (await db.query<any>(`select lesson_minutes,credits_remaining from dp_package_balances where student_id='${E}' and lesson_minutes in (60,65) order by lesson_minutes`)).rows;
+    expect(bal.find((r: any) => r.lesson_minutes === 60).credits_remaining).toBe(3);
+    const o = (await q(E, `select dp_my_coaching_overview('vocal-coaching') o`)).rows[0].o;
+    expect(o.credits_by_minutes["60"]).toBe(3);
+    expect(await snapshot()).toMatchObject({ ...before, credits_total: 4 });
+  });
+  it("does not change purchases already made when a package definition is edited, including its length", async () => {
+    const pkg = (await db.query<any>(`select id,lesson_minutes,credits_total,tier_name from dp_coaching_packages where tier_id='${TIER}' order by purchased_at limit 1`)).rows[0];
+    await q(ADMIN, `update dp_coaching_tiers set lesson_minutes=45,lesson_count=99,name='Renamed' where id='${TIER}'`);
+    expect((await db.query<any>(`select lesson_minutes,credits_total,tier_name from dp_coaching_packages where id='${pkg.id}'`)).rows[0]).toEqual({ lesson_minutes: pkg.lesson_minutes, credits_total: pkg.credits_total, tier_name: pkg.tier_name });
+    await q(ADMIN, `update dp_coaching_tiers set lesson_minutes=65,lesson_count=4,name='Guided' where id='${TIER}'`);
+  });
+  it("lets a schedule recorded at 60 minutes keep running, and uses real lengths to prevent overlap", async () => {
+    const before = (await db.query<any>(`select lesson_minutes from dp_coaching_plans where student_id='${E}'`)).rows[0].lesson_minutes;
+    expect(before).toBe(65);
+    await q(ADMIN, `update dp_coaching_plans set lesson_minutes=60 where student_id='${E}'`); // an earlier-offering schedule is valid
+    expect((await db.query<any>(`select lesson_minutes from dp_coaching_plans where student_id='${E}'`)).rows[0].lesson_minutes).toBe(60);
+    await expect(db.exec(`update dp_coaching_plans set lesson_minutes=90 where student_id='${E}'`)).rejects.toThrow();
+    await q(ADMIN, `update dp_coaching_plans set lesson_minutes=65 where student_id='${E}'`);
   });
 });
 

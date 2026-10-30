@@ -1,6 +1,10 @@
 -- Voice production readiness: private recordings, attempt history, coaching schedule and
 -- lesson credits, consultation inquiries, and consent-gated testimonial video.
 --
+-- LESSON LENGTHS: the current offering is 45 or 65 minutes. 60 stays a valid stored value only so that any purchase, schedule or lesson
+-- recorded as 60 minutes before the October 30 pricing change keeps working exactly as agreed; the app no longer offers 60 for new
+-- packages or schedules. Lessons and credits always match on exact length, so 60- and 65-minute entitlements never mix.
+--
 -- ADDITIVE ONLY. Reuses dp_sessions (as the scheduled lesson record), dp_submissions,
 -- dp_enrollments and the dp_private helper functions from the persistent coaching migration.
 -- NOT YET APPLIED to the live project: review, then apply to the verified project only.
@@ -120,7 +124,7 @@ create table dp_coaching_plans(
  program_id uuid not null references dp_programs(id),
  instructor_id uuid not null references auth.users(id),
  cadence text not null check(cadence in ('weekly','biweekly')),
- lesson_minutes int not null check(lesson_minutes in (45,60)),
+ lesson_minutes int not null check(lesson_minutes in (45,60,65)),
  first_lesson_on date not null check(first_lesson_on>=date '2000-01-03'),
  lesson_time time not null,
  timezone text not null,
@@ -138,7 +142,7 @@ create table dp_coaching_tiers(
  id uuid primary key default gen_random_uuid(),
  program_id uuid not null references dp_programs(id),
  slug text not null, name text not null, description text,
- lesson_minutes int not null check(lesson_minutes in (45,60)),
+ lesson_minutes int not null check(lesson_minutes in (45,60,65)),
  lesson_count int not null check(lesson_count between 1 and 200),
  valid_days int check(valid_days is null or valid_days between 1 and 1095),
  -- Lessons tagged with a level (dp_lesson_access) open for packages at or above that level.
@@ -173,7 +177,7 @@ create table dp_coaching_packages(
  id uuid primary key default gen_random_uuid(),
  student_id uuid not null references auth.users(id) on delete cascade,
  program_id uuid not null references dp_programs(id),
- lesson_minutes int not null check(lesson_minutes in (45,60)),
+ lesson_minutes int not null check(lesson_minutes in (45,60,65)),
  credits_total int not null check(credits_total>0),
  payment_status text not null default 'pending' check(payment_status in ('pending','partial','paid','complimentary','refunded','failed')),
  installments_total int not null default 1 check(installments_total between 1 and 12),
@@ -245,7 +249,7 @@ begin
 end $$;
 
 
-alter table dp_sessions add column if not exists lesson_minutes int check(lesson_minutes in (45,60));
+alter table dp_sessions add column if not exists lesson_minutes int check(lesson_minutes in (45,60,65));
 alter table dp_sessions add column if not exists appointment_status text
  check(appointment_status in ('scheduled','completed','cancelled','late_cancelled','no_show'));
 alter table dp_sessions add column if not exists plan_id uuid references dp_coaching_plans(id) on delete set null;
