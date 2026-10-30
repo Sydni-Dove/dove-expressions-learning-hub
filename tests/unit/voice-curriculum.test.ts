@@ -53,3 +53,11 @@ describe("voice curriculum content", () => {
     expect(t.exercises.some((e) => /instrumental-only/i.test(e.title))).toBe(true);
   });
 });
+
+import fs from "node:fs";
+import { buildSeedSql } from "@/scripts/generate-curriculum-seed";
+describe("curriculum seed migration", () => {
+  it("matches the generator (no hand edits, no drift from the TypeScript source)", () => {
+    expect(fs.readFileSync("supabase/migrations/20261030110000_dp_voice_curriculum_seed.sql", "utf8")).toBe(buildSeedSql());
+  });
+});

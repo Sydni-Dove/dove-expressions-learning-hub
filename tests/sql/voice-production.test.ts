@@ -511,7 +511,7 @@ describe("student resource area", () => {
     await denied(ADMIN, `insert into dp_voice_exercises(skill_id,title,video_url) values ('${s}','Insecure','http://example.com/v')`);
     await denied(A, `insert into dp_voice_exercises(skill_id,title) values ('${s}','Student made')`);
     await q(ADMIN, `insert into dp_voice_plan_templates(title,items) values ('Week 1 foundations','[{"exercise_id":"${ex1}"}]')`);
-    const names = async (u: string | null) => (await q(u, `select title from dp_voice_exercises order by title`).catch(() => ({ rows: [] }))).rows.map((r: any) => r.title);
+    const names = async (u: string | null) => (await q(u, `select title from dp_voice_exercises where curriculum_key is null order by title`).catch(() => ({ rows: [] }))).rows.map((r: any) => r.title);
     expect(await names(A)).toEqual(["Hiss breathing", "Lip trills"]);
     expect(await names(T)).toEqual(["Hiss breathing", "Lip trills", "Retired drill"]);
     expect(await names(C)).toEqual([]);
