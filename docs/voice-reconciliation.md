@@ -66,3 +66,7 @@ closes again on refund with every record kept); and the waiver (blocked until a 
 Ready (tested locally): payments webhook, installments, matching queue, waivers, scheduling, refunds, testimonials and embed, recordings, resource area.
 Blockers before any production step: hosted smoke test; owner decision on 60-minute monthly and 12-week prices; store changes and the reference for installment orders;
 pay-first enforcement; Apps Script installation; final release review; and the assessment source document (Assessment A) described in the curriculum report.
+
+
+## Addendum (Oct 30): later migrations
+Added after the reconciliation above: `20261030090000_dp_voice_practice_recordings.sql` (R2 recording metadata + append-only feedback), `20261030100000_dp_voice_intake_assessments_plans.sql` (profiles, intake, assessments, plans, progress checks) and `20261030110000_dp_voice_curriculum_seed.sql` (generated library seed). They reuse existing helpers and tables and add no duplicate assignment or recording tables. See `docs/voice-development-system.md`.

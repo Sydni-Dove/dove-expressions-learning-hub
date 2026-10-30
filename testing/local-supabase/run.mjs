@@ -63,9 +63,10 @@ async function seed() {
   }
   const all = Object.values(ids);
   // Remove anything earlier test runs created, so every run starts from the same fixtures.
-  for (const t of ["dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
-    "dp_voice_plan_templates", "dp_voice_exercises", "dp_voice_testimonials", "dp_sessions", "dp_coaching_plans", "dp_unmatched_payments", "dp_package_payments", "dp_coaching_packages", "dp_coaching_tiers", "dp_lesson_access", "dp_consultation_inquiries"])
+  for (const t of ["dp_voice_progress_check_private", "dp_voice_progress_checks", "dp_voice_plan_private", "dp_voice_plan_units", "dp_voice_plans", "dp_voice_assessment_private", "dp_voice_assessments", "dp_voice_intakes", "dp_voice_profiles", "dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
+    "dp_voice_plan_templates", "dp_voice_testimonials", "dp_sessions", "dp_coaching_plans", "dp_unmatched_payments", "dp_package_payments", "dp_coaching_packages", "dp_coaching_tiers", "dp_lesson_access", "dp_consultation_inquiries"])
     await c.query(`delete from ${t}`);
+  await c.query("delete from dp_voice_exercises where curriculum_key is null"); // keep the migration-seeded curriculum library
   await c.query("delete from storage.objects where bucket_id in ('voice-recordings','voice-testimonials')");
   for (const t of ["dp_enrollments", "dp_user_roles", "dp_class_teachers"]) await c.query(`delete from ${t} where user_id = any($1::uuid[])`, [all]);
   const prog = async (slug) => (await c.query("select id from dp_programs where slug=$1", [slug])).rows[0].id;

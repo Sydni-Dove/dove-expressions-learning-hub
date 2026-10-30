@@ -88,8 +88,8 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
     await expect(page.getByRole("alert").filter({ hasText: "https://" })).toBeVisible();
     await page.reload();
     await page.getByLabel("Template name").fill("Foundations week");
-    await page.getByRole("checkbox", { name: "Lip trills" }).check();
-    await page.getByRole("checkbox", { name: "Five-note scale" }).check();
+    await page.getByRole("checkbox", { name: "Lip trills", exact: true }).check();
+    await page.getByRole("checkbox", { name: "Five-note scale", exact: true }).check();
     await page.getByRole("button", { name: "Save template" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Template saved" })).toBeVisible();
     await page.reload();
@@ -137,7 +137,7 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
     await page.goto("/staff/voice/plans");
     await page.locator('label:has-text("Student") select').first().selectOption({ label: F.users.voiceOnly.name });
     await page.getByLabel(/Start from a template/).selectOption({ label: "Foundations week" });
-    await expect(page.getByRole("checkbox", { name: "Lip trills" })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Lip trills", exact: true })).toBeChecked();
     await page.getByLabel("Plan title").fill(PLAN);
     await page.getByLabel("Note to the student (optional)").fill("Go slowly and stay relaxed.");
     await page.getByLabel("Note for Lip trills").fill("Keep the airflow steady");
