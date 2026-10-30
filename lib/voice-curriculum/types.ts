@@ -21,6 +21,8 @@ export interface ExerciseSpec {
   difficulties: Difficulty[];
   /** Staff only: optional cautions. */
   safety?: string;
+  /** Never auto-selected into a draft plan. The instructor may add it only when the student explicitly requested it. */
+  onlyOnRequest?: boolean;
 }
 export interface AssignmentSpec { key: string; title: string; level: Level | "all"; minutes: number; steps: string[] }
 export interface LevelSpec { focus: string; goals: string[] }

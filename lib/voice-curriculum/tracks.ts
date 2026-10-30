@@ -150,7 +150,7 @@ export const TRACKS: AreaSpec[] = [
       demonstrate: "Model a short, humble description.",
       coach: "Encourage humility and Scripture. Remind the student that church leaders and their tradition guide how it may be shared.",
       difficulties: [{ issue: "Overconfident language", adjust: "Practise phrases like 'I sensed ... does this line up?'" }, { issue: "Fear of being wrong", adjust: "Practise in private first and with a trusted mentor." }] },
-    { key: "optional-tongues", title: "Optional: singing in tongues", level: "advanced", minutes: 10,
+    { key: "optional-tongues", title: "Optional: singing in tongues", level: "advanced", minutes: 10, onlyOnRequest: true,
       student: "This is offered only if you have asked for it and it fits your own beliefs and church tradition. You can skip it without any consequence. If you choose to, spend a short time in private worship and sing in the way you are already accustomed to, in line with 1 Corinthians 14:15. Note how you felt and whether it fits your understanding of Scripture.",
       demonstrate: "No demonstration is required. Never pressure or imitate. Only discuss if the student raises it.",
       coach: "Do not introduce, teach or expect this. Respect traditions that do not practise it. Follow the student's lead and your church's guidance.",
