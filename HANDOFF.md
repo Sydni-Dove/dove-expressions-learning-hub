@@ -193,3 +193,10 @@ review from every surface; external copies cannot be withdrawn (documented). 5. 
 shortcut per package (off by default). 7. Migrations and deployment remain on hold until the hosted-project smoke test and final release review.
 
 Browser suite: 52 tests passing on the local stack (40 role/flow, 12 responsive). Database tests, unit tests, type check, lint and production build pass.
+
+
+## October 30 correction: the lesson is 60 minutes, not 65
+An October 30 request changed the 60-minute lesson to a 65-minute lesson at $60. The owner then corrected it: **60 minutes, $65**. That change (commit
+`9aebc16`) was reverted in full, so lesson lengths are 45 and 60 minutes everywhere (database checks, forms, tests, documents). Single 60-minute lesson = $65 is
+confirmed. **Open question:** monthly four-lesson and 12-week prices at 60 minutes: the October 29 decision ($248; $720 = 3 x $240) or the October 30 figures
+($232; $690 = 3 x $230). `docs/voice-integrations.md` carries the October 29 figures with a note. No code depends on the answer.
