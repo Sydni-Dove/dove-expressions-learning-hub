@@ -127,7 +127,7 @@ export default async function VocalCoachingPage() {
           {nextSteps.length ? <ul className="mt-4 space-y-3">{nextSteps.map(({ step, i, r }) => (
             <li key={`${r.assignment.id}-${i}`}><Link href={`/assignments#assignment-${r.assignment.id}`} className="block rounded-2xl border border-white/15 bg-white/5 p-4 hover:bg-white/10"><p className="font-body text-sm text-white">{step}</p><p className="mt-1 font-ui text-xs text-[#E6A742]">{r.assignment.title}</p></Link></li>))}</ul>
             : <p className="mt-4 font-body text-sm text-white/75">No practice steps are waiting. New exercises appear after your instructor assigns them.</p>}
-          {courses && courses.length > 0 && <Link href={`/courses/${courses[0].id}`} className="mt-5 inline-flex items-center gap-1 font-ui text-sm font-bold text-[#E6A742]">Open lessons and demonstrations <ArrowUpRight className="h-4 w-4" /></Link>}
+          {courses && courses.length > 0 && <Link href={`/courses/${courses[0].id}`} className="mt-3 inline-flex min-h-[44px] items-center gap-1 font-ui text-sm font-bold text-[#E6A742]">Open lessons and demonstrations <ArrowUpRight className="h-4 w-4" /></Link>}
         </section>
       </div>
 
