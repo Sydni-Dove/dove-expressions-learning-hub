@@ -38,7 +38,13 @@ Schedule it daily (Vercel Cron or any scheduler that can send an Authorization h
 4. Set the variables above in the hosting environment.
 
 ## Existing Cloudflare services
-Searched both repositories: the Learning Hub has **no** Cloudflare integration; the Journal App only loads libraries from `cdnjs.cloudflare.com`. No R2 bucket, token or account configuration exists in either repo, so nothing can be reused yet. If the WordPress site already sits behind Cloudflare, the same account can host R2, but that was not verifiable from here.
+The owner confirms the Dove Expressions app already uses Cloudflare. Neither repository records how: no wrangler config, bucket name, token, account id or R2 reference exists in the Learning Hub or Journal App
+(the Journal App only loads libraries from `cdnjs.cloudflare.com`), and the Vercel connector lists no domains. An unauthenticated request to doveexpressions.org from the build sandbox returned 403, which is consistent with
+a Cloudflare/WAF rule but does not prove it. So the **account, DNS and any existing bucket should be reused**, but their identifiers must come from the owner:
+1. The Cloudflare **account id** and whether an R2 bucket already exists (reuse it with a `voice/` prefix only if it is private; otherwise create `dove-voice-recordings`).
+2. A **new bucket-scoped API token** for Voice (do not reuse a broad or existing token). Set it in the hosting environment, never in the repo or chat.
+3. The Learning Hub origin(s) for the bucket CORS rule.
+No code change is needed to reuse an existing account: only the `R2_*` variables.
 
 ## Cost (Cloudflare R2 list pricing; confirm current rates)
 Storage about $0.015 per GB-month, 10 GB free. Class A (writes) $4.50 per million, Class B (reads) $0.36 per million, free tiers apply, **egress is free**.
