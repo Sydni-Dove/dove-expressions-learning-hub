@@ -51,7 +51,7 @@ export function LessonStatusButtons({ lessonId }: { lessonId: string }) {
 
 export function PlanForm({ students, programId, instructorId }: { students: Student[]; programId: string; instructorId: string }) {
   const { busy, message, error, run } = useAction();
-  const [f, setF] = useState({ student: "", cadence: "weekly", minutes: "65", date: "", time: "", tz: typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "" });
+  const [f, setF] = useState({ student: "", cadence: "weekly", minutes: "60", date: "", time: "", tz: typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "" });
   const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
   const submit = (e: React.FormEvent) => { e.preventDefault(); run(async () => {
     if (!f.student || !f.date || !f.time || !f.tz) throw new Error("Choose a student, first lesson date, time and time zone.");
@@ -66,7 +66,7 @@ export function PlanForm({ students, programId, instructorId }: { students: Stud
   return <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
     <label className="font-ui text-sm sm:col-span-2">Student<select value={f.student} onChange={e => set("student", e.target.value)} className="input mt-1 w-full"><option value="">Choose…</option>{students.map(s => <option key={s.id} value={s.id}>{label(s)}</option>)}</select></label>
     <label className="font-ui text-sm">Rhythm<select value={f.cadence} onChange={e => set("cadence", e.target.value)} className="input mt-1 w-full"><option value="weekly">Weekly</option><option value="biweekly">Every other week (shares a position)</option></select></label>
-    <label className="font-ui text-sm">Lesson length<select value={f.minutes} onChange={e => set("minutes", e.target.value)} className="input mt-1 w-full"><option value="45">45 minutes</option><option value="65">65 minutes</option></select></label>
+    <label className="font-ui text-sm">Lesson length<select value={f.minutes} onChange={e => set("minutes", e.target.value)} className="input mt-1 w-full"><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label>
     <label className="font-ui text-sm">First lesson date<input type="date" value={f.date} onChange={e => set("date", e.target.value)} className="input mt-1 w-full"/></label>
     <label className="font-ui text-sm">Start time<input type="time" value={f.time} onChange={e => set("time", e.target.value)} className="input mt-1 w-full"/></label>
     <label className="font-ui text-sm sm:col-span-2">Time zone<input value={f.tz} onChange={e => set("tz", e.target.value)} className="input mt-1 w-full" placeholder="America/New_York"/></label>

@@ -63,11 +63,3 @@ export function creditsSummary(o: CoachingOverview | null, now = new Date()) {
 export const LESSON_STATUS_LABEL: Record<string, string> = {
   completed: "Completed", cancelled: "Cancelled", late_cancelled: "Late cancellation", no_show: "Missed", scheduled: "Scheduled"
 };
-
-/** Where "Renew or add lessons" goes, by lesson length. 65 has no page until the store owner creates one; never invent a URL. */
-export function renewalLink(minutes: number | undefined, env: { book65?: string } = { book65: process.env.NEXT_PUBLIC_BOOKING_URL_65 }): { href: string; external: boolean } {
-  if (minutes === 45) return { href: "https://doveexpressions.org/book-45/", external: true };
-  if (minutes === 60) return { href: "https://doveexpressions.org/book-60/", external: true }; // earlier offering, existing page
-  if (minutes === 65 && env.book65 && /^https:\/\/\S+$/.test(env.book65)) return { href: env.book65, external: true };
-  return { href: "/messages", external: false };
-}

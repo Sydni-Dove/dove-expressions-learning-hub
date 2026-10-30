@@ -1,7 +1,6 @@
 # Voice integrations: payment, booking, consultation
 
-Audited October 29, 2026 against the live WordPress site (read-only) and this repository. **Pricing revised October 30, 2026: the 60-minute
-offering was replaced by a 65-minute lesson** (see "Revised pricing" below).
+Audited October 29, 2026 against the live WordPress site (read-only) and this repository.
 
 ## What was verified on doveexpressions.org
 - **Booking pages are Google Calendar appointment schedules in an iframe** (`/book-45/`, `/book-60/`, `/book-demo/`,
@@ -38,65 +37,45 @@ To enable (all require you or an admin): apply the migrations; create and link p
 the same email they use at checkout (otherwise WooCommerce shows a failed delivery and retries).
 
 ### Packages are configured in the Hub (staff > Voice > Packages)
-Each package defines: lesson count, lesson length (**45 or 65 minutes**), expiry, a library access level, whether it includes a personalized
-development plan, how many assessments and recording-feedback reviews it includes, how many store payments it has, and which store product IDs
-sell it. Entitlements are copied onto each purchase, so editing a package never changes what a student already bought. Nothing is seeded;
-products map to nothing until you link them, and unlinked products grant nothing. Prices live only in WooCommerce; the Hub stores no prices.
+Each package defines: lesson count, lesson length (45 or 60), expiry, a library access level, whether it includes a personalized
+development plan, how many assessments and recording-feedback reviews it includes, and which store product IDs sell it.
+Entitlements are copied onto each purchase, so editing a package never changes what a student already bought. Nothing is
+seeded; products map to nothing until you link them, and unlinked products grant nothing.
 
-### Revised pricing (owner, October 30, 2026), final
-| Package | Price | Payments | Entitlement to configure |
-|---|---|---|---|
-| Single lesson, 45 min | $45 | 1 | 1 x 45 |
-| Single lesson, 65 min | $60 | 1 | 1 x 65 |
-| Monthly, four 45-min lessons | $172 | 1 (one-time, no auto-renewal) | 4 x 45 |
-| Monthly, four 65-min lessons | $232 | 1 (one-time, no auto-renewal) | 4 x 65 |
-| 12-week coaching, twelve 45-min lessons | $504 | 3 x $168 | 12 x 45, 3 payments (unlocks 4, 8, 12) |
-| 12-week coaching, twelve 65-min lessons | $690 | 3 x $230 | 12 x 65, 3 payments (unlocks 4, 8, 12) |
-| Annual coaching | future only | | not configured |
-| 3-lesson and 6-lesson bundles | discontinued | | not configured |
-
-**What changed on October 30** (relative to the October 29 decision; none of the October 29 prices was ever live in the store or recorded in the Hub):
-| Offering | October 29 | October 30 |
+Finalized prices (owner, October 29) and the proposed entitlement for each. Prices live only in WooCommerce:
+| Package | Price | Entitlement to configure |
 |---|---|---|
-| Single lesson | 60 min, $65 | **65 min, $60** |
-| Monthly, four lessons | 60 min, $248 | **65 min, $232** |
-| 12-week, twelve lessons | 60 min, $720 (3 x $240) | **65 min, $690 (3 x $230)** |
-| Everything at 45 minutes | $45, $172, $504 (3 x $168) | unchanged |
+| Single lesson, 45 min | $45 | 1 x 45 |
+| Single lesson, 60 min | $65 | 1 x 60 |
+| Monthly, four weekly lessons, 45 min | $172 | 4 x 45, one-time purchase, no auto-renewal |
+| Monthly, four weekly lessons, 60 min | $248 | 4 x 60, one-time purchase, no auto-renewal |
+| 12-week coaching, twelve weekly lessons, 45 min | $504 (3 x $168) | 12 x 45 |
+| 12-week coaching, twelve weekly lessons, 60 min | $720 (3 x $240) | 12 x 60 |
+| Annual coaching | future only | not configured |
+| 3-lesson and 6-lesson bundles | discontinued | not configured |
 
-**Existing purchases and agreements are not changed.**
-- *In the Hub:* nothing exists to change. The migrations have not been applied to the hosted project, no package, schedule or lesson has been
-  recorded there, and no tier is seeded.
-- *If a 60-minute purchase is recorded later* (for example from an order placed before this change): 60 minutes remains a valid stored length, so it keeps
-  its lessons, expiry, payments and 60-minute lessons exactly as sold. The app no longer offers 60 for new packages or schedules, and lessons and credits
-  match on exact length, so a 65-minute lesson never draws on a 60-minute purchase or the reverse. Purchases are copied at the time of sale; editing a package
-  (even its length) never alters purchases already made. This is covered by database tests.
-- *In the store:* historical orders are untouched. **Students already part-way through a 60-minute 12-week plan** (payments still due on product 1847 at its old
-  per-payment price) keep that agreement: when the webhook is enabled, keep a Hub package named "12-week, 60-minute (earlier offering)" active and linked to
-  the old product ID until their payments finish. Do not retire it early, because a retired package stops mapping that product (a store product can be linked
-  to only one active package). The same applies to any other old 60-minute product with an open payment plan.
-- *Not built:* converting existing 60-minute lessons into 65-minute lessons. That would be a change to a student's agreement and needs your decision case by case.
+**What the live store shows today versus the finalized prices above (read-only audit on October 29; nothing in the store was changed).**
+The finalized 12-week 60-minute plan is $720 total, which is **three payments of $240**. The store currently lists it differently:
 
-**What the live store shows today versus the revised prices (read-only audit on October 29; nothing in the store was changed).** The 65-minute products do not
-exist yet, so new products (or edits to the old ones, which would change their price for new buyers only) are a store-owner action:
-| Item | Store today | Revised | Action for the store owner |
+| Item | Store today | Finalized | Action for the store owner |
 |---|---|---|---|
-| Single 45-min (1705) | $45 | $45 | matches |
-| Single 60-min (1793) | $70 | replaced by single 65-min, $60 | create a 65-minute product; keep 1793 only while old purchases need it |
-| Monthly four 45-min (1785) | $172 | $172 | matches |
-| Monthly four 60-min (1786) | $252 | replaced by monthly four 65-min, $232 | create a 65-minute product |
-| 12-week 45-min, paid in full (1787) / 3 payments (1846) | $504 / $168 per payment | $504 / $168 | matches |
-| 12-week 60-min, paid in full (1788) / 3 payments (1847) | $744 / $248 per payment | replaced by 12-week 65-min, $690 / 3 x $230 | create 65-minute products; keep 1847 mapped while old plans finish |
+| 60-min single lesson (1793) | $70 | $65 | change price |
+| Monthly, four 60-min lessons (1786) | $252 | $248 | change price |
+| 12-week 60-min, paid in full (1788) | $744 | $720 | change price |
+| 12-week 60-min, 3 payments (1847) | $248 per payment | $240 per payment | change price |
+| 12-week 45-min, 3 payments (1846) / paid in full (1787) | $168 / $504 | $168 / $504 | matches |
 | 3-lesson bundle (1707, published), 6-lesson bundle (1709, private) | exist | discontinued | unpublish or delete |
 | Annual coaching (1789, 1790, private) | exist | future only | leave private |
-| Vocal Intensive, 90 min (1794) | exists | not in the revised list | decide; the Hub supports 45- and 65-minute lessons (plus earlier 60) only |
+| Vocal Intensive, 90 min (1794) | exists | not in the finalized list | decide; the Hub supports 45/60-minute lessons only |
 
-Store product IDs for the 45-minute offering: 1705, 1785, 1787/1846. The 65-minute products have no IDs until the store owner creates them.
+Any "$248 per payment" for the 12-week 60-minute plan elsewhere in these notes is the store's current (wrong) value, not the target.
+Store product IDs for the finalized packages: 1705, 1793, 1785, 1786, 1787/1846 (12-week 45), 1788/1847 (12-week 60).
 
 ### The installment rule (approved October 29, built and tested)
 A first installment never grants the whole package. With more than one payment, lessons unlock in proportion to payments received:
 12 lessons over 3 payments = **4 after payment 1, 8 after payment 2, all 12 after payment 3** (approved by the owner). A refunded
 installment takes its lessons back out of the unlocked balance. Quantity above 1 on an installment product is refused rather than guessed.
-Revised prices: 12-week 45-minute **$504 = 3 x $168**; 12-week 65-minute **$690 = 3 x $230**. The store has not been changed. The unlock rule is the same for both.
+Finalized prices: 12-week 45-minute **$504 = 3 x $168**; 12-week 60-minute **$720 = 3 x $240**. The store has not been changed.
 
 **Scheduling is separate from payment.** The instructor can schedule appointments across the whole 12-week program at any time ("Schedule
 through 12 weeks"). What payment controls is whether a lesson can be *recorded as taught* (or charged as a late cancellation or missed lesson):
@@ -130,13 +109,9 @@ confirmed against the real store; until then payments without a reference queue 
 
 ### Payment-first, then booking (needs a WordPress change; not done)
 Because the pages are public iframes, "pay first" is not enforced today. Options, in order of effort: (1) after checkout,
-redirect to the booking page and remove the public links (honor system); (2) make `/book-45/` and the 65-minute booking page visible only to
+redirect to the booking page and remove the public links (honor system); (2) make `/book-45/` and `/book-60/` visible only to
 logged-in customers who bought a vocal product (needs a WordPress membership or visibility rule); (3) recommended for
 recurring students: skip public booking and let the Hub generate their slot. No WordPress pages were modified.
-
-**65-minute booking:** the live `/book-60/` page ("Schedule Your 60-Minute Lesson") is a Google Calendar appointment schedule set to 60 minutes. There is no
-65-minute page or schedule yet; creating one (a new appointment schedule and page) is a store-owner action. Until then the student dashboard sends a
-65-minute student who needs to renew to "Message your instructor"; set `NEXT_PUBLIC_BOOKING_URL_65` to the real page address once it exists.
 
 ## Consultation automation (built, not deployed)
 See `integrations/consultation/README.md`. Needs a Google owner to install the script on the form's response sheet,

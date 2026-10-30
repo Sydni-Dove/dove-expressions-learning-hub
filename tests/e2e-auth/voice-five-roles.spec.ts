@@ -100,7 +100,7 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
   test("creates a package and records it for the voice-only student", async ({ browser }) => {
     const { ctx, page } = await login(browser, "instructor");
     await page.goto("/staff/voice/packages");
-    await page.getByLabel("Name").fill("Monthly 65 (test)");
+    await page.getByLabel("Name").fill("Monthly 60 (test)");
     await page.getByLabel("Number of lessons").fill("4");
     await page.getByLabel(/Lessons expire after/).fill("45");
     await page.getByLabel("Recording feedback reviews included").fill("2");
@@ -108,9 +108,9 @@ test.describe("3. Instructor builds the reusable library, packages, plans and go
     await page.getByRole("button", { name: "Create package" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Package created" })).toBeVisible();
     await page.reload();
-    await expect(page.getByText(/4 × 65 min · 45 days · development plan/)).toBeVisible();
+    await expect(page.getByText(/4 × 60 min · 45 days · development plan/)).toBeVisible();
     await page.locator('label:has-text("Student") select').selectOption({ label: F.users.voiceOnly.name });
-    await page.locator("label", { hasText: /^Package(?!\s+level)/ }).locator("select").selectOption({ label: "Monthly 65 (test)" });
+    await page.locator("label", { hasText: /^Package(?!\s+level)/ }).locator("select").selectOption({ label: "Monthly 60 (test)" });
     await page.getByRole("button", { name: "Record package" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Package recorded" })).toBeVisible();
     await ctx.close();
@@ -199,7 +199,7 @@ test.describe("4. Student resource area (voice-only student)", () => {
     const { ctx, page } = await login(browser, "voiceOnly");
     await page.goto("/voice");
     await expect(page.getByRole("heading", { name: "Next lesson" })).toBeVisible();
-    await expect(page.locator('section[aria-labelledby="next-lesson"]').getByText("65-minute private lesson")).toBeVisible();
+    await expect(page.locator('section[aria-labelledby="next-lesson"]').getByText("60-minute private lesson")).toBeVisible();
     await expect(page.getByText("Lessons remaining").locator("..").locator("..")).toContainText("4");
     await expect(page.getByRole("heading", { name: "Current assignments" }).locator("../..").getByText(PLAN)).toBeVisible();
     expect(await page.locator("body").innerText()).not.toMatch(/12-session|12 session/i);
@@ -345,7 +345,7 @@ test.describe("6. Unauthorized access prevention", () => {
   test("a student cannot approve their own work, publish a testimonial, or edit instructor data", async () => {
     const ex = await rest("voiceOnly", "dp_voice_exercises", { method: "POST", body: JSON.stringify({ skill_id: (await (await rest("voiceOnly", "dp_voice_skills?select=id&limit=1")).json())[0].id, title: "Student exercise" }) });
     expect(ex.status).toBeGreaterThanOrEqual(400);
-    const pkg = await rest("voiceOnly", "dp_coaching_packages", { method: "POST", body: JSON.stringify({ student_id: F.ids.voiceOnly, program_id: "00000000-0000-0000-0000-000000000000", lesson_minutes: 65, credits_total: 99, payment_status: "paid" }) });
+    const pkg = await rest("voiceOnly", "dp_coaching_packages", { method: "POST", body: JSON.stringify({ student_id: F.ids.voiceOnly, program_id: "00000000-0000-0000-0000-000000000000", lesson_minutes: 60, credits_total: 99, payment_status: "paid" }) });
     expect(pkg.status).toBeGreaterThanOrEqual(400);
     const content = await rest("voiceOnly", "dp_voice_resource_content?key=eq.welcome", { method: "PATCH", body: JSON.stringify({ body: "hacked" }) });
     expect(await content.json()).toEqual([]);
@@ -531,14 +531,14 @@ test.describe("9. Store payments: installments are matched to their purchase and
   test("an instructor links a 12-lesson, 3-payment package to a store product", async ({ browser }) => {
     const { ctx, page } = await login(browser, "instructor");
     await page.goto("/staff/voice/packages");
-    await page.getByLabel("Name").fill("12-week 65 (test)");
+    await page.getByLabel("Name").fill("12-week 60 (test)");
     await page.getByLabel("Store product IDs (comma separated)").fill("9002");
     await page.getByLabel("Number of lessons").fill("12");
     await page.getByLabel("Number of payments in the store").fill("3");
     await page.getByRole("button", { name: "Create package" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Package created" })).toBeVisible();
     await page.reload();
-    await expect(page.getByText(/12 × 65 min · no expiry · 3 payments/)).toBeVisible();
+    await expect(page.getByText(/12 × 60 min · no expiry · 3 payments/)).toBeVisible();
     await page.getByLabel("Name").fill("Duplicate link");
     await page.getByLabel("Store product IDs (comma separated)").fill("9002");
     await page.getByRole("button", { name: "Create package" }).click();
@@ -597,44 +597,6 @@ test.describe("9. Store payments: installments are matched to their purchase and
   });
 });
 
-test.describe("9b. An earlier 60-minute plan already in flight keeps working beside the 65-minute offering", () => {
-  const SECRET = "local-test-webhook-secret";
-  const post = async (order: object) => {
-    const body = JSON.stringify(order);
-    return fetch("http://localhost:3111/api/webhooks/woocommerce", { method: "POST", headers: { "content-type": "application/json", "x-wc-webhook-signature": createHmac("sha256", SECRET).update(body).digest("base64") }, body });
-  };
-  const order = (id: number, status: string, parent = 0) => ({ id, status, parent_id: parent, billing: { email: F.users.creative.email }, line_items: [{ id: id * 10, product_id: 9003, quantity: 1 }] });
-  test("the instructor can keep the earlier package, and 60-minute payments unlock 4 then 8 lessons of 60 minutes", async ({ browser }) => {
-    const { ctx, page } = await login(browser, "instructor");
-    await page.goto("/staff/voice/packages");
-    // new packages offer only 45 and 65 minutes
-    expect(await page.getByLabel("Lesson length").first().locator("option").allTextContents()).toEqual(["45 minutes", "65 minutes"]);
-    await page.getByLabel("Name").fill("12-week, 60-minute (earlier offering)");
-    await page.getByLabel("This keeps an earlier 60-minute offering").check();
-    await page.getByLabel("Lesson length").first().selectOption("60");
-    await page.getByLabel("Number of lessons").fill("12");
-    await page.getByLabel("Number of payments in the store").fill("3");
-    await page.getByLabel("Store product IDs (comma separated)").fill("9003");
-    await page.getByRole("button", { name: "Create package" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Package created" })).toBeVisible();
-    await page.reload();
-    await expect(page.getByText(/12-week, 60-minute \(earlier offering\) · 12 × 60 min/)).toBeVisible();
-    await ctx.close();
-    // the creative-only fixture has no Voice enrollment, so use the multi-program student, who already has a 65-minute plan
-    const o = (id: number, status: string, parent = 0) => ({ ...order(id, status, parent), billing: { email: F.users.multi.email } });
-    expect((await post(o(7400, "completed"))).status).toBe(200);
-    expect((await post(o(7401, "completed", 7400))).status).toBe(200);
-    const ov = await (await rest("multi", "rpc/dp_my_coaching_overview", { method: "POST", body: JSON.stringify({ target_program_slug: "vocal-coaching" }) })).json();
-    const earlier = ov.packages.filter((p: { lesson_minutes: number }) => p.lesson_minutes === 60);
-    expect(earlier).toHaveLength(1);
-    expect(earlier[0]).toMatchObject({ credits_total: 12, credits_unlocked: 8, installments_paid: 2, remaining: 8 });
-    const current = ov.packages.filter((p: { lesson_minutes: number }) => p.lesson_minutes === 65);
-    expect(current.length).toBeGreaterThanOrEqual(1); // the 65-minute plan from section 9 is untouched
-    expect(ov.credits_by_minutes["60"]).toBe(8);
-    expect(ov.credits_by_minutes["65"]).toBeGreaterThan(0);
-  });
-});
-
 test.describe("10. Scheduling the whole program is separate from payment", () => {
   test("lessons can be scheduled for 12 weeks; a lesson beyond paid lessons cannot be recorded as taught without a waiver reason", async ({ browser }) => {
     const { ctx, page } = await login(browser, "instructor");
@@ -643,7 +605,7 @@ test.describe("10. Scheduling the whole program is separate from payment", () =>
     await expect(page.getByRole("status").filter({ hasText: /new lesson/ }).first()).toBeVisible();
     const lessons = await (await rest("admin", `dp_sessions?select=id,scheduled_at&student_id=eq.${F.ids.voiceOnly}&appointment_status=eq.scheduled&order=scheduled_at`)).json();
     expect(lessons.length).toBeGreaterThanOrEqual(11);
-    // Vera has 4 paid 65-minute lessons from the package recorded earlier: the first four can be recorded, the fifth cannot.
+    // Vera has 4 paid lessons from the package recorded earlier: the first four can be recorded, the fifth cannot.
     for (const l of lessons.slice(0, 4)) {
       const r = await rest("admin", "rpc/dp_set_lesson_status", { method: "POST", body: JSON.stringify({ target_id: l.id, next_status: "completed" }) });
       expect(r.status, "paid lesson").toBeLessThan(300);

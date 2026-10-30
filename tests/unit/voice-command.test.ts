@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { capacitySummary, renewalAttention, consultationState, slotLabel, formatTime, type Plan, type Balance } from "@/lib/voice-command";
 import { summarizeAssignments, creditsSummary, assignmentState } from "@/lib/voice-dashboard";
 
-const plan = (o: Partial<Plan>): Plan => ({ id: Math.random().toString(), student_id: Math.random().toString(), cadence: "weekly", lesson_minutes: 65, weekday: 1, lesson_time: "10:00:00", week_parity: 0, timezone: "UTC", status: "active", ...o });
+const plan = (o: Partial<Plan>): Plan => ({ id: Math.random().toString(), student_id: Math.random().toString(), cadence: "weekly", lesson_minutes: 60, weekday: 1, lesson_time: "10:00:00", week_parity: 0, timezone: "UTC", status: "active", ...o });
 const now = new Date("2026-11-01T12:00:00Z");
 
 describe("capacity", () => {
@@ -25,7 +25,7 @@ describe("capacity", () => {
 });
 
 describe("renewals", () => {
-  const b = (o: Partial<Balance>): Balance => ({ package_id: "p", student_id: "s1", credits_total: 4, credits_remaining: 4, payment_status: "paid", expires_at: null, usable: true, renewed: false, lesson_minutes: 65, ...o });
+  const b = (o: Partial<Balance>): Balance => ({ package_id: "p", student_id: "s1", credits_total: 4, credits_remaining: 4, payment_status: "paid", expires_at: null, usable: true, renewed: false, lesson_minutes: 60, ...o });
   it("flags low, expiring, exhausted and unpaid packages", () => {
     expect(renewalAttention([b({ credits_remaining: 1 })], now)[0].reason).toBe("One lesson remaining");
     expect(renewalAttention([b({ credits_remaining: 0, usable: true })], now)[0].reason).toBe("No lessons remaining");
@@ -58,24 +58,24 @@ describe("student dashboard state", () => {
     expect(s).toMatchObject({ complete: 1, total: 3, awaitingReview: 1, practiceMinutes: 20, percent: 33 });
   });
   it("summarizes lesson credits without counting unpaid or expired packages", () => {
-    const o: any = { credits_by_minutes: { "65": 2, "45": 0 }, packages: [
-      { credits_total: 4, remaining: 2, lesson_minutes: 65, payment_status: "paid", expires_at: "2026-11-05T00:00:00Z", purchased_at: "" },
-      { credits_total: 4, remaining: 4, lesson_minutes: 65, payment_status: "pending", expires_at: null, purchased_at: "" }] };
+    const o: any = { credits_by_minutes: { "60": 2, "45": 0 }, packages: [
+      { credits_total: 4, remaining: 2, lesson_minutes: 60, payment_status: "paid", expires_at: "2026-11-05T00:00:00Z", purchased_at: "" },
+      { credits_total: 4, remaining: 4, lesson_minutes: 60, payment_status: "pending", expires_at: null, purchased_at: "" }] };
     const c = creditsSummary(o, now);
     expect(c).toMatchObject({ total: 2, expiringSoon: true, pendingPayment: true, hasPackages: true });
-    expect(c.byMinutes).toEqual([{ minutes: 65, count: 2 }]);
+    expect(c.byMinutes).toEqual([{ minutes: 60, count: 2 }]);
     expect(creditsSummary(null, now)).toMatchObject({ hasPackages: false, total: 0, low: false });
   });
 });
 
 describe("installment plans", () => {
-  const pkg = (o: object): any => ({ credits_total: 12, credits_remaining: 0, payment_status: "partial", expires_at: null, usable: true, renewed: false, lesson_minutes: 65, student_id: "s", package_id: "p", ...o });
+  const pkg = (o: object): any => ({ credits_total: 12, credits_remaining: 0, payment_status: "partial", expires_at: null, usable: true, renewed: false, lesson_minutes: 60, student_id: "s", package_id: "p", ...o });
   it("tells the instructor when the next installment is what is holding lessons back", () => {
     expect(renewalAttention([pkg({})], now)[0].reason).toMatch(/installment/i);
     expect(renewalAttention([pkg({ credits_remaining: 3 })], now)).toEqual([]);
   });
   it("tells the student how many lessons a partial payment has unlocked", () => {
-    const c = creditsSummary({ credits_by_minutes: { "65": 4 }, packages: [{ credits_total: 12, remaining: 4, credits_unlocked: 4, installments_total: 3, installments_paid: 1, lesson_minutes: 65, payment_status: "partial", expires_at: null, purchased_at: "" }] } as any, now);
+    const c = creditsSummary({ credits_by_minutes: { "60": 4 }, packages: [{ credits_total: 12, remaining: 4, credits_unlocked: 4, installments_total: 3, installments_paid: 1, lesson_minutes: 60, payment_status: "partial", expires_at: null, purchased_at: "" }] } as any, now);
     expect(c.installments).toEqual([{ paid: 1, total: 3, unlocked: 4, lessons: 12 }]);
     expect(c.total).toBe(4);
   });
@@ -97,24 +97,5 @@ describe("website embed origins", () => {
     expect(embedOrigins(undefined)).toEqual(DEFAULT_EMBED_ORIGINS);
     expect(embedOrigins("https://a.example, http://insecure.example, javascript:x, https://b.example:8443")).toEqual(["https://a.example", "https://b.example:8443"]);
     expect(embedOrigins("*")).toEqual(DEFAULT_EMBED_ORIGINS);
-  });
-});
-
-import { renewalLink } from "@/lib/voice-dashboard";
-describe("lesson lengths on the student dashboard", () => {
-  it("shows legacy 60-minute and current 65-minute balances side by side without mixing them", () => {
-    const c = creditsSummary({ credits_by_minutes: { "60": 3, "65": 4, "45": 0 }, packages: [
-      { credits_total: 4, remaining: 3, lesson_minutes: 60, payment_status: "paid", expires_at: null, purchased_at: "" },
-      { credits_total: 4, remaining: 4, lesson_minutes: 65, payment_status: "paid", expires_at: null, purchased_at: "" }] } as any, now);
-    expect(c.byMinutes).toEqual([{ minutes: 60, count: 3 }, { minutes: 65, count: 4 }]);
-    expect(c.total).toBe(7);
-  });
-  it("sends renewals to a real page for the length, and never invents one for 65 minutes", () => {
-    expect(renewalLink(45)).toEqual({ href: "https://doveexpressions.org/book-45/", external: true });
-    expect(renewalLink(60)).toEqual({ href: "https://doveexpressions.org/book-60/", external: true });
-    expect(renewalLink(65, {})).toEqual({ href: "/messages", external: false });
-    expect(renewalLink(65, { book65: "https://doveexpressions.org/book-65/" })).toEqual({ href: "https://doveexpressions.org/book-65/", external: true });
-    expect(renewalLink(65, { book65: "javascript:alert(1)" })).toEqual({ href: "/messages", external: false });
-    expect(renewalLink(undefined, {})).toEqual({ href: "/messages", external: false });
   });
 });
