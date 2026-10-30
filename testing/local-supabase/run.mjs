@@ -63,7 +63,7 @@ async function seed() {
   }
   const all = Object.values(ids);
   // Remove anything earlier test runs created, so every run starts from the same fixtures.
-  for (const t of ["dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
+  for (const t of ["dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
     "dp_voice_plan_templates", "dp_voice_exercises", "dp_voice_testimonials", "dp_sessions", "dp_coaching_plans", "dp_unmatched_payments", "dp_package_payments", "dp_coaching_packages", "dp_coaching_tiers", "dp_lesson_access", "dp_consultation_inquiries"])
     await c.query(`delete from ${t}`);
   await c.query("delete from storage.objects where bucket_id in ('voice-recordings','voice-testimonials')");

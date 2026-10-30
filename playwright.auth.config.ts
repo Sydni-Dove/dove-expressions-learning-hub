@@ -12,6 +12,7 @@ export default defineConfig({
   use: { baseURL: process.env.E2E_BASE_URL || "http://localhost:3111", launchOptions, screenshot: "only-on-failure", trace: "off" },
   projects: [
     { name: "desktop", testMatch: /voice-five-roles\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
+    { name: "recordings", testMatch: /recordings\.spec\.ts/, use: { ...devices["Desktop Chrome"], permissions: ["microphone"], launchOptions: { ...launchOptions, args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] } } },
     { name: "responsive", testMatch: /responsive\.spec\.ts/, use: { launchOptions } }
   ]
 });
