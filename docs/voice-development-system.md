@@ -5,7 +5,7 @@ Status: built and tested locally. **Not deployed. Migrations `20261030100000` an
 ## What exists (implemented)
 | Piece | Where |
 |---|---|
-| 12 skill areas + 3 separate optional Creative Worship tracks (assessment tasks and indicators, beginner/intermediate/advanced goals, teaching outline, 72 exercises with demonstrate / coach / difficulties / safety, practice assignments, progress indicators, follow-up assessment) | `lib/voice-curriculum/` (single source) |
+| 12 skill areas + 3 separate optional Creative Worship tracks (assessment tasks and indicators, beginner/intermediate/advanced goals, teaching outline, 74 exercises with demonstrate / coach / difficulties / safety, practice assignments, progress indicators, follow-up assessment) | `lib/voice-curriculum/` (single source) |
 | Exercise library seed (generated, drift-tested) | `supabase/migrations/20261030110000_dp_voice_curriculum_seed.sql` |
 | Interactive instructor curriculum browser | `/staff/voice/curriculum` |
 | Post-consultation **intake**, separate from skill assessments; Hub form or Google Forms CSV import | `/voice/intake`, `/staff/voice/development` (import), `lib/voice-assessments/intake.ts` |
