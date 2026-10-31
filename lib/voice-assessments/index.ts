@@ -7,6 +7,8 @@ export * from "./types";
 export * from "./intake";
 export * from "./summaries";
 export * from "./plan";
+export * from "./ratings";
+export * from "./import-mapping";
 export { PERSONAL_TIME, TONGUES_FOLLOW_UP } from "./personal-time";
 export { CREATIVE_EXPRESSION, OBSERVATION_DIMENSIONS, OBSERVATION_LEVELS } from "./creative-expression";
 export { HEARING_GOD_PENDING, parseHearingGodSource, toDefinition, summarizeHearingGod } from "./hearing-god";

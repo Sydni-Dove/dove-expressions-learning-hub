@@ -13,6 +13,7 @@ export default async function StaffRecordings({ searchParams }: { searchParams: 
   const supabase = createClient();
   const student = searchParams.student && /^[0-9a-f-]{36}$/i.test(searchParams.student) ? searchParams.student : undefined;
   const all = (await loadRecordings(supabase, { studentId: student })) as RecordingRow[];
+  const { data: ex } = await supabase.from("dp_voice_exercises").select("id,title").eq("is_active", true).order("title");
   const sections: [string, string[]][] = [["Waiting for review", ["submitted"]], ["Returned for revision", ["returned"]], ["Reviewed", ["reviewed"]], ["Private drafts (not submitted)", ["saved"]]];
   return (
     <div className="space-y-8 pb-20">
@@ -25,7 +26,7 @@ export default async function StaffRecordings({ searchParams }: { searchParams: 
         return (
           <section key={title} aria-label={title}>
             <h2 className="font-display text-xl text-[#630000]">{title} ({rows.length})</h2>
-            {rows.length ? <ul className="mt-3 space-y-3">{rows.map((r) => <RecordingCard key={r.id} rec={r} mode="staff" />)}</ul> : <p className="mt-2 font-body text-sm text-[#4a3a3a]">None.</p>}
+            {rows.length ? <ul className="mt-3 space-y-3">{rows.map((r) => <RecordingCard key={r.id} rec={r} mode="staff" exercises={(ex ?? []) as { id: string; title: string }[]} />)}</ul> : <p className="mt-2 font-body text-sm text-[#4a3a3a]">None.</p>}
           </section>);
       })}
     </div>

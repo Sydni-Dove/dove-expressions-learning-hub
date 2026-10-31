@@ -7,7 +7,7 @@ import { formatDuration } from "@/lib/recording-client";
 export interface RecordingRow {
   id: string; label: string; title: string; part_no: number; revision_no: number; status: string; duration_seconds: number | null;
   created_at: string; submitted_at: string | null; assignmentTitle: string | null; studentName?: string;
-  feedback: { id: string; kind: string; body: string; follow_up: string | null; created_at: string }[];
+  feedback: { id: string; kind: string; body: string; follow_up: string | null; follow_up_assignment_id?: string | null; created_at: string }[];
 }
 const STATUS: Record<string, { text: string; cls: string }> = {
   pending: { text: "Uploading", cls: "bg-amber-100 text-amber-900" },
@@ -18,10 +18,11 @@ const STATUS: Record<string, { text: string; cls: string }> = {
 };
 
 /** One recording: stream it (no download), see its history and feedback, and take the next action. */
-export default function RecordingCard({ rec, mode, onRevise }: { rec: RecordingRow; mode: "student" | "staff"; onRevise?: (r: RecordingRow) => void }) {
+export interface ExerciseChoice { id: string; title: string }
+export default function RecordingCard({ rec, mode, onRevise, exercises = [] }: { rec: RecordingRow; mode: "student" | "staff"; onRevise?: (r: RecordingRow) => void; exercises?: ExerciseChoice[] }) {
   const router = useRouter();
   const [url, setUrl] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState(""); const [followUp, setFollowUp] = useState("");
+  const [feedback, setFeedback] = useState(""); const [followUp, setFollowUp] = useState(""); const [exercise, setExercise] = useState(""); const [due, setDue] = useState(""); const [done, setDone] = useState("");
   const st = STATUS[rec.status] ?? STATUS.saved;
 
   async function load() {
@@ -58,6 +59,7 @@ export default function RecordingCard({ rec, mode, onRevise }: { rec: RecordingR
               <p className="font-ui text-xs font-semibold text-[#630000]">{f.kind === "return_for_revision" ? "Returned for revision" : "Feedback"} · {new Date(f.created_at).toLocaleDateString()}</p>
               <p className="mt-1 whitespace-pre-wrap">{f.body}</p>
               {f.follow_up && <p className="mt-2 font-semibold">Next practice: <span className="font-normal">{f.follow_up}</span></p>}
+              {f.follow_up_assignment_id && <a href="/assignments" className="mt-1 inline-flex min-h-[44px] items-center font-ui text-sm font-semibold text-[#630000] underline">Open the assigned exercise</a>}
             </blockquote>))}
         </div>)}
       {mode === "student" && (
@@ -75,11 +77,27 @@ export default function RecordingCard({ rec, mode, onRevise }: { rec: RecordingR
           <label className="block font-ui text-sm font-semibold text-[#630000]">Follow-up exercise (optional)
             <input className="mt-1 block min-h-[44px] w-full rounded-xl border border-[#630000]/25 px-3 font-body text-base" value={followUp} onChange={(e) => setFollowUp(e.target.value)} maxLength={1000} />
           </label>
+          {exercises.length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block font-ui text-sm font-semibold text-[#630000]">Assign an exercise (optional)
+                <select className="mt-1 block min-h-[44px] w-full rounded-xl border border-[#630000]/25 px-3 font-body text-base" value={exercise} onChange={(e) => setExercise(e.target.value)}><option value="">No exercise</option>{exercises.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select></label>
+              <label className="block font-ui text-sm font-semibold text-[#630000]">Due
+                <input type="date" className="mt-1 block min-h-[44px] w-full rounded-xl border border-[#630000]/25 px-3 font-body text-base" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+            </div>)}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy || !feedback.trim()} onClick={() => act("/api/recordings/review", { id: rec.id, outcome: "reviewed", feedback, followUp: followUp || undefined })} className="min-h-[44px] rounded-full bg-[#630000] px-5 font-ui text-sm font-bold text-white disabled:opacity-50">Send feedback</button>
-            <button type="button" disabled={busy || !feedback.trim()} onClick={() => act("/api/recordings/review", { id: rec.id, outcome: "returned", feedback, followUp: followUp || undefined })} className="min-h-[44px] rounded-full border border-[#630000]/40 px-5 font-ui text-sm font-semibold text-[#630000] disabled:opacity-50">Return for revision</button>
+            <button type="button" disabled={busy || !feedback.trim() || (!!exercise && !due)} onClick={() => act("/api/recordings/review", { id: rec.id, outcome: "reviewed", feedback, followUp: followUp || undefined, exerciseId: exercise || undefined, due: due || undefined })} className="min-h-[44px] rounded-full bg-[#630000] px-5 font-ui text-sm font-bold text-white disabled:opacity-50">Send feedback</button>
+            <button type="button" disabled={busy || !feedback.trim()} onClick={() => act("/api/recordings/review", { id: rec.id, outcome: "returned", feedback, followUp: followUp || undefined, exerciseId: exercise || undefined, due: due || undefined })} className="min-h-[44px] rounded-full border border-[#630000]/40 px-5 font-ui text-sm font-semibold text-[#630000] disabled:opacity-50">Return for revision</button>
           </div>
         </form>)}
+      {mode === "staff" && ["reviewed", "returned"].includes(rec.status) && exercises.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-3 sm:items-end">
+          <label className="block font-ui text-sm font-semibold text-[#630000]">Assign a follow-up exercise
+            <select className="mt-1 block min-h-[44px] w-full rounded-xl border border-[#630000]/25 px-3 font-body text-base" value={exercise} onChange={(e) => setExercise(e.target.value)}><option value="">Choose…</option>{exercises.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select></label>
+          <label className="block font-ui text-sm font-semibold text-[#630000]">Due
+            <input type="date" className="mt-1 block min-h-[44px] w-full rounded-xl border border-[#630000]/25 px-3 font-body text-base" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+          <button type="button" disabled={busy || !exercise || !due} onClick={async () => { if (await act("/api/recordings/followup", { id: rec.id, exerciseId: exercise, due })) setDone("Follow-up exercise assigned."); }} className="min-h-[44px] rounded-full border border-[#630000]/40 px-5 font-ui text-sm font-semibold text-[#630000] disabled:opacity-50">Assign exercise</button>
+        </div>)}
+      {done && <p role="status" className="mt-2 font-ui text-sm text-[#630000]">{done}</p>}
       {error && <p role="alert" className="mt-2 font-ui text-sm text-[#9b1c1c]">{error}</p>}
     </li>
   );

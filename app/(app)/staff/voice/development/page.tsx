@@ -7,11 +7,13 @@ export const dynamic = "force-dynamic";
 export default async function DevelopmentIndex() {
   await requireRoles(["faculty", "teacher", "super_admin"]);
   const supabase = createClient();
-  const [roster, intakes, assess, plans] = await Promise.all([
+  const [roster, intakes, assess, plans, maps, keys] = await Promise.all([
     supabase.rpc("dp_program_students", { target_program_slug: "vocal-coaching" }),
     supabase.from("dp_voice_intakes").select("student_id"),
     supabase.from("dp_voice_assessments").select("student_id,status"),
-    supabase.from("dp_voice_plans").select("student_id,status").eq("is_sample", false)
+    supabase.from("dp_voice_plans").select("student_id,status").eq("is_sample", false),
+    supabase.from("dp_voice_import_mappings").select("id,name,header_map").order("name"),
+    supabase.from("dp_voice_intakes").select("import_key").not("import_key", "is", null)
   ]);
   const students = (roster.data ?? []) as { id: string; full_name: string | null; email: string | null }[];
   const count = <T extends { student_id: string }>(rows: T[] | null, id: string, f: (r: T) => boolean = () => true) => (rows ?? []).filter((r) => r.student_id === id && f(r)).length;
@@ -28,7 +30,7 @@ export default async function DevelopmentIndex() {
             <Link href={`/staff/voice/development/${s.id}`} className="link-action font-semibold">{s.full_name || s.email}</Link>
             <span className="text-charcoal/70">Intake {count(intakes.data, s.id) ? "✓" : "—"} · Assessments {count(assess.data, s.id)} ({count(assess.data, s.id, (a) => a.status === "submitted")} to review) · Plan {count(plans.data, s.id, (p) => p.status === "active") ? "active" : count(plans.data, s.id) ? "draft" : "—"}</span>
           </li>))}</ul> : <p className="font-body text-sm">No Voice students yet.</p>}</section>
-      <section aria-labelledby="imp-h"><h2 id="imp-h" className="mb-2 font-display text-xl text-burgundy">Import intake from Google Forms</h2><ImportIntake roster={students} /></section>
+      <section aria-labelledby="imp-h"><h2 id="imp-h" className="mb-2 font-display text-xl text-burgundy">Import intake from Google Forms</h2><ImportIntake roster={students} savedMappings={(maps.data ?? []) as never} existingKeys={(keys.data ?? []).map((k) => k.import_key as string)} /></section>
     </div>
   );
 }

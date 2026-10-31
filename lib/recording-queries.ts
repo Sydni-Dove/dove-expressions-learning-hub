@@ -10,7 +10,7 @@ export async function loadRecordings(supabase: SupabaseClient, opts: { studentId
   const { data } = await q;
   const rows = (data ?? []) as any[];
   const ids = rows.map((r) => r.id);
-  const fb = ids.length ? (await supabase.from("dp_practice_recording_feedback").select("id,recording_id,kind,body,follow_up,created_at").in("recording_id", ids).order("created_at")).data ?? [] : [];
+  const fb = ids.length ? (await supabase.from("dp_practice_recording_feedback").select("id,recording_id,kind,body,follow_up,follow_up_assignment_id,created_at").in("recording_id", ids).order("created_at")).data ?? [] : [];
   const names = new Map<string, string>();
   const studentIds = [...new Set(rows.map((r) => r.student_id))];
   if (!opts.studentId && studentIds.length) {

@@ -16,7 +16,7 @@ export const fail = (message: string, status = 400) => NextResponse.json({ error
 /** Database errors are written for people; hide anything that is not one of ours. */
 export function friendly(error: { message: string } | null | undefined) {
   const m = error?.message ?? "";
-  if (/Voice enrollment|not yours|maximum number|larger|returned for revision|unsubmitted|not authorized|not found|already saved|submitted/i.test(m)) return m;
+  if (/Voice enrollment|not yours|maximum number|larger|returned for revision|unsubmitted|not authorized|not found|already saved|submitted|not available for this student|Follow-up/i.test(m)) return m;
   if (/duplicate key|unique/i.test(m)) return "That part already has a recording. Choose the next part number or revise the returned one.";
   return "Could not complete that request.";
 }

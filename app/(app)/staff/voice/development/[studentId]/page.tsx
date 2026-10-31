@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AssignAssessment, PlanBuilder, ProgressCheckForm, ReviewAssessment, TrackApproval, type UnitRow } from "@/components/voice/DevelopmentAdmin";
+import { AssignAssessment, PlanBuilder, ProgressCheckForm, RatingsComparison, ReviewAssessment, TrackApproval, type PlanVersion, type UnitRow } from "@/components/voice/DevelopmentAdmin";
 import { requireRoles } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
-import { ASSESSMENTS, INTAKE_QUESTIONS, questionsOf, summarizeCreative, summarizePersonalTime, type AssessmentKind, type IntakeAnswers, type PackageType } from "@/lib/voice-assessments";
+import { ASSESSMENTS, INTAKE_QUESTIONS, compareRatings, questionsOf, summarizeCreative, summarizePersonalTime, type AssessmentKind, type IntakeAnswers, type PackageType } from "@/lib/voice-assessments";
 import type { TrackKey } from "@/lib/voice-curriculum";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export default async function StudentDevelopment({ params }: { params: { student
     supabase.from("dp_voice_profiles").select("selected_tracks,approved_tracks,tongues_requested").eq("student_id", sid).maybeSingle(),
     supabase.from("dp_voice_intakes").select("id,source,answers,submitted_at").eq("student_id", sid).order("submitted_at", { ascending: false }).limit(1),
     supabase.from("dp_voice_assessments").select("id,kind,status,answers,shared_summary,submitted_at").eq("student_id", sid).order("assigned_at", { ascending: false }),
-    supabase.from("dp_voice_plans").select("id,title,status,package_type").eq("student_id", sid).order("created_at", { ascending: false }),
-    supabase.from("dp_voice_progress_checks").select("id,week,kind,strengths,next_focus,shared_at").eq("student_id", sid).order("created_at", { ascending: false })
+    supabase.from("dp_voice_plans").select("id,title,status,package_type,version_no,source_sample_id,sample_reviewed_at").eq("student_id", sid).order("created_at", { ascending: false }),
+    supabase.from("dp_voice_progress_checks").select("id,week,kind,ratings,strengths,next_focus,shared_at,created_at").eq("student_id", sid).order("created_at", { ascending: false })
   ]);
   const ids = (assessments ?? []).map((a) => a.id);
   const { data: priv } = ids.length ? await supabase.from("dp_voice_assessment_private").select("assessment_id,observations,notes").in("assessment_id", ids) : { data: [] };
@@ -27,6 +27,8 @@ export default async function StudentDevelopment({ params }: { params: { student
   const intake = (intakes?.[0]?.answers ?? undefined) as IntakeAnswers | undefined;
   const plan = (plans ?? []).find((p) => p.status === "draft") ?? (plans ?? []).find((p) => p.status === "active") ?? null;
   const { data: unitRows } = plan ? await supabase.from("dp_voice_plan_units").select("*").eq("plan_id", plan.id).order("seq") : { data: [] };
+  const { data: versionRows } = plan ? await supabase.from("dp_voice_plan_versions").select("version_no,reason,created_at,snapshot").eq("plan_id", plan.id).order("version_no", { ascending: false }) : { data: [] };
+  const versions: PlanVersion[] = (versionRows ?? []).map((v: any) => ({ version_no: v.version_no, reason: v.reason, created_at: v.created_at, units: (v.snapshot?.units ?? []).map((u: any) => ({ week: u.week, area_title: u.area_title, level: u.level, objective: u.objective, status: u.status })) }));
   const { data: planPriv } = plan ? await supabase.from("dp_voice_plan_private").select("rationale").eq("plan_id", plan.id).maybeSingle() : { data: null };
   const creative = (assessments ?? []).find((a) => a.kind === "creative_expression" && ["submitted", "reviewed"].includes(a.status));
   const creativeObs = (priv ?? []).find((p) => p.assessment_id === creative?.id)?.observations as Record<string, string> | undefined;
@@ -59,11 +61,13 @@ export default async function StudentDevelopment({ params }: { params: { student
             </li>); })}</ul></section>
 
       <section aria-labelledby="plan-h"><h2 id="plan-h" className="mb-2 font-display text-xl text-burgundy">Personalized plan {plan ? `(${plan.status})` : ""}</h2>
-        <PlanBuilder studentId={sid} studentName={student.full_name || student.email || "student"} existing={plan ? { id: plan.id, title: plan.title, status: plan.status, package_type: plan.package_type as PackageType, units, rationale: (planPriv?.rationale ?? {}) as never } : null}
+        <PlanBuilder studentId={sid} studentName={student.full_name || student.email || "student"} existing={plan ? { id: plan.id, title: plan.title, status: plan.status, package_type: plan.package_type as PackageType, units, rationale: (planPriv?.rationale ?? {}) as never, version_no: plan.version_no, source_sample_id: plan.source_sample_id, sample_reviewed_at: plan.sample_reviewed_at } : null} versions={versions}
           input={{ intake, selectedTracks: selected, approvedTracks: approved, creativeSuggestions: creativeSummary?.suggestedAreas, tonguesRequested: !!profile?.tongues_requested } as never} /></section>
 
       {plan?.status === "active" && <section aria-labelledby="pc-h"><h2 id="pc-h" className="mb-2 font-display text-xl text-burgundy">Progress checks</h2>
-        <ProgressCheckForm planId={plan.id} weeks={units.filter((u) => u.checkpoint).map((u) => u.week)} />
+        <ProgressCheckForm planId={plan.id} weeks={units.filter((u) => u.checkpoint).map((u) => u.week)} areas={[...new Map(units.map((u) => [u.areaKey, { key: u.areaKey, title: u.areaTitle }])).values()]} />
+        <h3 className="mt-6 font-display text-lg text-burgundy">Baseline, midpoint and final</h3>
+        <RatingsComparison rows={compareRatings((checks ?? []) as never, units.map((u) => u.areaKey))} />
         <ul className="mt-4 space-y-2">{(checks ?? []).map((c) => <li key={c.id} className="card p-3 font-body text-sm">Week {c.week} · {c.kind} · {c.shared_at ? "shared" : "private"} — {c.strengths}</li>)}</ul></section>}
     </div>
   );

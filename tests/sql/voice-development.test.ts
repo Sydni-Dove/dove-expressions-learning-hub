@@ -65,11 +65,11 @@ describe("intake (separate from assessments)", () => {
     expect((await q(A, `select count(*)::int c from dp_voice_intakes`)).rows[0].c).toBe(1);
     expect((await q(B, `select count(*)::int c from dp_voice_intakes`)).rows[0].c).toBe(0);
     expect((await q(STRANGER, `select count(*)::int c from dp_voice_intakes`)).rows[0].c).toBe(0);
-    expect(await denied(A, `select dp_voice_import_intake('${B}','{}'::jsonb,'{}')`)).toMatch(/Not authorized/);
-    await q(FAC, `select dp_voice_import_intake('${B}','{"goals":"harmony"}'::jsonb, array['worship_leadership'])`);
+    expect(await denied(A, `select dp_voice_import_intake('${B}','{}'::jsonb,'{}',now(),'key-aaaaaaaaaaaaaaaa')`)).toMatch(/Not authorized/);
+    await q(FAC, `select dp_voice_import_intake('${B}','{"goals":"harmony"}'::jsonb, array['worship_leadership'],now(),'key-bbbbbbbbbbbbbbbb')`);
     const p = (await q(FAC, `select selected_tracks,approved_tracks from dp_voice_profiles where student_id='${B}'`)).rows[0];
     expect(p).toEqual({ selected_tracks: ["worship_leadership"], approved_tracks: [] });
-    expect(await denied(FAC, `select dp_voice_import_intake('${STRANGER}','{}'::jsonb,'{}')`)).toMatch(/not enrolled/);
+    expect(await denied(FAC, `select dp_voice_import_intake('${STRANGER}','{}'::jsonb,'{}',now(),'key-cccccccccccccccc')`)).toMatch(/not enrolled/);
     await denied(A, `update dp_voice_intakes set answers='{}'`).catch(() => null);
   });
 });
@@ -138,7 +138,7 @@ describe("development plans", () => {
   });
   it("a sample copies into a draft for a student, with the track rules re-checked", async () => {
     const sample = (await q(FAC, `select id from dp_voice_plans where is_sample limit 1`)).rows[0].id;
-    expect(await denied(FAC, `select dp_plan_copy_sample('${sample}','${B}')`)).toMatch(/choice and your approval/);
+    expect(await denied(FAC, `select dp_plan_copy_sample('${sample}','${B}')`)).toMatch(/None of the sample lessons fit/);
     const copy = (await q(FAC, `select dp_plan_copy_sample('${sample}','${A}') id`)).rows[0].id;
     expect((await q(FAC, `select status,is_sample from dp_voice_plans where id='${copy}'`)).rows[0]).toEqual({ status: "draft", is_sample: false });
     expect((await q(A, `select count(*)::int c from dp_voice_plans where id='${copy}'`)).rows[0].c).toBe(0);
@@ -160,9 +160,9 @@ describe("development plans", () => {
 describe("progress checks", () => {
   it("are visible to the student only after they are shared; private notes stay with staff; saves never overwrite", async () => {
     const plan = (await q(FAC, `select id from dp_voice_plans where student_id='${A}' and status='active'`)).rows[0].id;
-    const one = (await q(FAC, `select dp_progress_check_save('${plan}',4,'progress','{"breath":3}'::jsonb,'Steadier','Longer phrases','staff only',false) id`)).rows[0].id;
+    const one = (await q(FAC, `select dp_progress_check_save('${plan}',4,'progress','{"posture-breath":3}'::jsonb,'Steadier','Longer phrases','staff only',false) id`)).rows[0].id;
     expect((await q(A, `select count(*)::int c from dp_voice_progress_checks`)).rows[0].c).toBe(0);
-    await q(FAC, `select dp_progress_check_save('${plan}',4,'progress','{"breath":4}'::jsonb,'Steadier still','Longer phrases','staff only 2',true)`);
+    await q(FAC, `select dp_progress_check_save('${plan}',4,'progress','{"posture-breath":4}'::jsonb,'Steadier still','Longer phrases','staff only 2',true)`);
     const seen = (await q(A, `select strengths from dp_voice_progress_checks`)).rows;
     expect(seen).toEqual([{ strengths: "Steadier still" }]);
     expect((await q(A, `select count(*)::int c from dp_voice_progress_check_private`)).rows[0].c).toBe(0);
