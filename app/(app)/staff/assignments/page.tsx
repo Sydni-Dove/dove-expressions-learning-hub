@@ -44,7 +44,7 @@ export default async function StaffAssignmentsPage() {
       <div className="space-y-4">
         {(assignments ?? []).map((a) => {
           const subs = subsFor(a.id);
-          const awaiting = subs.filter((s) => s.status === "submitted");
+          const awaiting = subs.filter((s) => ["submitted", "revised"].includes(s.status));
           const course = a.dp_courses as unknown as { title: string } | null;
           return (
             <div key={a.id} className="card p-5">
@@ -91,3 +91,4 @@ export default async function StaffAssignmentsPage() {
     </div>
   );
 }
+

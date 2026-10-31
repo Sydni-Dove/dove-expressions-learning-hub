@@ -168,7 +168,7 @@ describe("rollback script", () => {
   it("restores pre-0027 behavior and removes what 0027/0028 added", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
-    const { db: db2 } = await createDb();
+    const { db: db2 } = await createDb({ upTo: "0028", skip: ["0025"] });
     await db2.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0027_0028_practical_courses.sql"), "utf8"));
     const cols = await db2.query<any>("select column_name from information_schema.columns where table_name='dp_courses' and column_name in ('access_mode','lesson_style')");
     expect(cols.rows.length).toBe(0);
@@ -179,7 +179,7 @@ describe("rollback script", () => {
   it("0025/0026 rollback removes the seeded course, storage policies and helper", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
-    const { db: db3 } = await createDb();
+    const { db: db3 } = await createDb({ upTo: "0028", skip: ["0025"] });
     await db3.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0027_0028_practical_courses.sql"), "utf8"));
     await db3.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0025_0026.sql"), "utf8"));
     expect((await db3.query<any>("select count(*)::int n from dp_courses where slug='dreams-and-visions'")).rows[0].n).toBe(0);
@@ -187,3 +187,4 @@ describe("rollback script", () => {
     expect((await db3.query<any>("select to_regproc('dp_safe_uuid(text)') r")).rows[0].r).toBeNull();
   }, 240000);
 });
+

@@ -54,6 +54,10 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-pill bg-pale-pink/60 px-6 py-3 text-sm font-ui font-semibold text-burgundy transition-all duration-150 hover:bg-pale-pink hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none min-h-[44px];
   }
+  /* Text-style actions (links and small buttons) keep a comfortable touch target. */
+  .link-action {
+    @apply inline-flex min-h-[44px] items-center px-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold;
+  }
   .btn-outline {
     @apply inline-flex items-center justify-center gap-2 rounded-pill border-2 border-burgundy px-6 py-2.5 text-sm font-ui font-semibold text-burgundy transition-all duration-150 hover:bg-burgundy hover:text-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 disabled:pointer-events-none min-h-[44px];
   }

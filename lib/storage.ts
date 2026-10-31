@@ -79,3 +79,8 @@ export async function resolveStorageContent(
   }
   return value;
 }
+
+/** Sign a list of recording references; https links pass through unchanged. */
+export async function signMediaList(supabase: SupabaseClient, refs: string[]): Promise<{ original: string; signed: string }[]> {
+  return Promise.all(refs.map(async (original) => ({ original, signed: (await resolveStorageContent(supabase, original)) as string })));
+}

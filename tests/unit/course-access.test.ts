@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { decideCourseAccess, getCourseSettings, canAccessCourse } from "@/lib/course-access";
+import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
 
 function fakeSupabase(opts: { settings?: any; settingsError?: boolean; rpc?: { data: any; error: any } }) {
   return {
@@ -10,18 +10,9 @@ function fakeSupabase(opts: { settings?: any; settingsError?: boolean; rpc?: { d
   } as any;
 }
 
-describe("decideCourseAccess", () => {
-  it("staff always pass", () => expect(decideCourseAccess({ accessMode: "enrolled", isStaff: true, hasEnrollment: false })).toBe(true));
-  it("open courses pass for everyone", () => expect(decideCourseAccess({ accessMode: "open", isStaff: false, hasEnrollment: false })).toBe(true));
-  it("enrolled courses need an enrollment", () => {
-    expect(decideCourseAccess({ accessMode: "enrolled", isStaff: false, hasEnrollment: false })).toBe(false);
-    expect(decideCourseAccess({ accessMode: "enrolled", isStaff: false, hasEnrollment: true })).toBe(true);
-  });
-});
-
 describe("getCourseSettings", () => {
-  it("falls back to open + reflective when the columns don't exist (pre-migration DB)", async () => {
-    expect(await getCourseSettings(fakeSupabase({ settingsError: true }), "c")).toEqual({ accessMode: "open", lessonStyle: "reflective" });
+  it("fails closed with enrolled + reflective when the columns don't exist (pre-migration DB)", async () => {
+    expect(await getCourseSettings(fakeSupabase({ settingsError: true }), "c")).toEqual({ accessMode: "enrolled", lessonStyle: "reflective" });
   });
   it("reads enrolled/practical", async () => {
     const s = fakeSupabase({ settings: { access_mode: "enrolled", lesson_style: "practical" } });
@@ -31,11 +22,11 @@ describe("getCourseSettings", () => {
 
 describe("canAccessCourse", () => {
   const enrolled = { accessMode: "enrolled", lessonStyle: "practical" } as const;
-  it("does not call the database for open courses or staff", async () => {
+  it("checks the database even for open courses and staff", async () => {
     const s = fakeSupabase({});
-    expect(await canAccessCourse(s, "c", { accessMode: "open", lessonStyle: "reflective" }, false)).toBe(true);
-    expect(await canAccessCourse(s, "c", enrolled, true)).toBe(true);
-    expect(s.rpc).not.toHaveBeenCalled();
+    expect(await canAccessCourse(s, "c", { accessMode: "open", lessonStyle: "reflective" }, false)).toBe(false);
+    expect(await canAccessCourse(s, "c", enrolled, true)).toBe(false);
+    expect(s.rpc).toHaveBeenCalledTimes(2);
   });
   it("asks dp_can_access_course for enrolled courses", async () => {
     expect(await canAccessCourse(fakeSupabase({ rpc: { data: true, error: null } }), "c", enrolled, false)).toBe(true);
@@ -45,3 +36,4 @@ describe("canAccessCourse", () => {
     expect(await canAccessCourse(fakeSupabase({ rpc: { data: null, error: { message: "boom" } } }), "c", enrolled, false)).toBe(false);
   });
 });
+

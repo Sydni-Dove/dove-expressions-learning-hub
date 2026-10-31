@@ -21,7 +21,7 @@ do $$ begin
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 exception when duplicate_object then null; end $$;
 create schema if not exists storage;
-create table storage.buckets (id text primary key, name text, public boolean default false);
+create table storage.buckets (id text primary key, name text, public boolean default false, file_size_limit bigint, allowed_mime_types text[]);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
 alter table storage.objects enable row level security;
 create function storage.foldername(name text) returns text[] language sql immutable as $$
@@ -29,13 +29,27 @@ create function storage.foldername(name text) returns text[] language sql immuta
 create table public.profiles (id uuid primary key, full_name text, email text, role text);
 alter table public.profiles enable row level security;
 grant usage on schema public, auth, storage to anon, authenticated;
+-- Supabase lets the API roles query storage.objects; row policies decide what they see.
+grant select on storage.objects to anon;
 `;
+
+/** Incremental builder for release/rollback tests: a bare database plus the ordered migration file list, applied one file at a time. */
+export async function createBareDb() {
+  const db = new PGlite();
+  await db.exec(BOOTSTRAP);
+  await db.exec(`alter default privileges in schema public grant execute on functions to anon, authenticated;`);
+  const dir = path.join(__dirname, "../../supabase/migrations");
+  const files = fs.readdirSync(dir).filter((f) => /^(?:\d{4}|\d{14})_.*\.sql$/.test(f)).sort().filter((f) => !f.startsWith("0025"));
+  return { db, files, dir, apply: async (f: string) => { await db.exec(fs.readFileSync(path.join(dir, f), "utf8")); } };
+}
 
 export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip: ["0025"] }) {
   const db = new PGlite();
   await db.exec(BOOTSTRAP);
+  // Supabase grants new functions to API roles at creation time; later REVOKEs must persist.
+  await db.exec(`alter default privileges in schema public grant execute on functions to anon, authenticated;`);
   const dir = path.join(__dirname, "../../supabase/migrations");
-  const files = fs.readdirSync(dir).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
+  const files = fs.readdirSync(dir).filter((f) => /^(?:\d{4}|\d{14})_.*\.sql$/.test(f)).sort();
   const applied: string[] = [];
   for (const f of files) {
     if (opts.upTo && f.slice(0, 4) > opts.upTo) break;
@@ -44,7 +58,6 @@ export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip
     applied.push(f);
   }
   await db.exec(`grant all on all tables in schema public to anon, authenticated;
-                 grant execute on all functions in schema public to anon, authenticated;
                  grant select, insert, update, delete on all tables in schema storage to authenticated;`);
   return { db, applied };
 }
@@ -57,4 +70,13 @@ export async function asUser<T = any>(db: PGlite, uid: string | null, sql: strin
   } finally {
     await db.exec(`reset role; set app.uid = ''; set app.role = '';`);
   }
+}
+
+
+/** Fixture helper: give a student a verified-paid WooCommerce coaching package (what a verified, attributed payment produces). Direct insert as the database owner. */
+export async function grantPaid(db: PGlite, studentId: string, o: { assessments?: number; status?: string; installmentsPaid?: number; installmentsTotal?: number; expiresInDays?: number | null; source?: string; order?: string } = {}) {
+  const order = o.order ?? `fx-${studentId.slice(-6)}-${Math.random().toString(36).slice(2, 8)}`;
+  const exp = o.expiresInDays === null ? "null" : `now() + interval '${o.expiresInDays ?? 90} days'`;
+  await db.exec(`insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,installments_total,installments_paid,source,assessments_included,expires_at,external_order_id,external_line_item_id)
+    values ('${studentId}',(select id from dp_programs where slug='vocal-coaching'),60,4,'${o.status ?? "paid"}',${o.installmentsTotal ?? 1},${o.installmentsPaid ?? 1},'${o.source ?? "woocommerce"}',${o.assessments ?? 5},${exp},'${order}','1')`);
 }
