@@ -33,6 +33,16 @@ grant usage on schema public, auth, storage to anon, authenticated;
 grant select on storage.objects to anon;
 `;
 
+/** Incremental builder for release/rollback tests: a bare database plus the ordered migration file list, applied one file at a time. */
+export async function createBareDb() {
+  const db = new PGlite();
+  await db.exec(BOOTSTRAP);
+  await db.exec(`alter default privileges in schema public grant execute on functions to anon, authenticated;`);
+  const dir = path.join(__dirname, "../../supabase/migrations");
+  const files = fs.readdirSync(dir).filter((f) => /^(?:\d{4}|\d{14})_.*\.sql$/.test(f)).sort().filter((f) => !f.startsWith("0025"));
+  return { db, files, dir, apply: async (f: string) => { await db.exec(fs.readFileSync(path.join(dir, f), "utf8")); } };
+}
+
 export async function createDb(opts: { upTo?: string; skip?: string[] } = { skip: ["0025"] }) {
   const db = new PGlite();
   await db.exec(BOOTSTRAP);

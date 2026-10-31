@@ -37,34 +37,36 @@ Schedule it daily (Vercel Cron or any scheduler that can send an Authorization h
 3. Add a CORS rule on the bucket: allowed origins = the Learning Hub origin(s) only; methods `GET, PUT, HEAD`; headers `Content-Type`; expose `Content-Length`.
 4. Set the variables above in the hosting environment.
 
-## Existing Cloudflare infrastructure: what the Hearing God investigation found
-Read-only inspection of `dove-expressions-journal-app` (source, edge functions, migrations, `vercel.json`, CI, history) and of the hosted Supabase project's storage metadata. No secret values were read or printed (the app's `.env` holds only the public Supabase URL and anon key).
+## Existing Cloudflare infrastructure: what the Hearing God investigation found (CORRECTED)
+**Correction.** An earlier version of this section said Hearing God had no R2 integration. That was wrong: my first search of the journal repository missed it because the integration is **not in that repository**. It lives in a deployed Supabase edge function. The hosted project was inspected read-only (function source, migration list, column names, aggregate counts); no secret value was read or printed.
 
-**There is no Cloudflare R2 integration in Hearing God.** No R2/S3-compatible endpoint, `R2_*`/`CF_*` variable, wrangler or Workers/Pages config, Turnstile, or Cloudflare reference in code, docs, CI or the 123-commit history (only `cdnjs.cloudflare.com` script links).
-- **Recording / upload / storage:** the browser records with MediaRecorder (`RecordingCapture`, drafts kept in IndexedDB), and uploads straight to **Supabase Storage**. Journal recordings and attachments go to the bucket `entry-attachments`, which is **public** (190 objects at the time of inspection); `rehearsal-audio` is private (0 objects); `journal-imports` is private (50 MB limit).
-- **Transcription:** Supabase edge function `transcribe-audio` fetches the audio by URL and sends it to Groq (Whisper), with Gemini as fallback. Other functions: `ocr-image`, `polly-tts` (AWS Polly), `import-journal`.
-- **Environment variable names (server/edge):** `GROQ_API_KEY`, `GEMINI_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `JOURNAL_IMPORT_APP_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Client: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Hosting: Vercel (`vercel.json` is SPA rewrites only).
-- **So Cloudflare is, as far as the code shows, in front of the site (DNS/proxy/WAF) rather than used for storage.** That is consistent with the owner's statement and with doveexpressions.org answering our sandbox with HTTP 403, but the account contents (zones, buckets, tokens, rules) can only be seen in the Cloudflare dashboard.
+**What exists (hosted project `jnlvvlkwskidloripvtp`):**
+- Edge function **`hearing-god-video`** (active, deployed from outside the repo). It issues **presigned R2 URLs** and never buffers video: `upload-url` (PUT, 10 min), `playback-url` (GET, 60 min, after reading the caller's own `entry_attachments` row under their session), `delete` (only keys under `hearing-god/<user id>/`), and `transcribe` (hands a signed GET URL to Gemini). Video only (mp4/mov/m4v/webm), default limit 300 MB, key shape `hearing-god/<user>/pending/<draft>/video/<uuid>.<ext>`.
+- Secret **names** it reads (values live in Supabase function secrets, not in code): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (the code's default is **`dove-media`**; the real value may differ), `R2_MAX_UPLOAD_BYTES`, `GEMINI_API_KEY`.
+- Database: migration `add_r2_video_metadata` (2026-09-09) added `entry_attachments.r2_object_key` and `entry_attachments.storage_provider`. Today: **1** attachment uses R2, **134** use Supabase Storage.
+- Everything else Hearing God stores (audio recordings, images, documents) goes to **Supabase Storage**; journal audio/attachments are in the **public** `entry-attachments` bucket (190 stored objects; 135 attachment rows), `rehearsal-audio` and `journal-imports` are private. `shared-attachment` signs Supabase Storage objects, not R2. `hg-video-diag` is retired.
+- Drift to know about: seven hosted edge functions (`hearing-god-video`, `shared-attachment`, `hg-video-diag`, `acx-extract`, `screenshot-extract`, `backfill-audio-transcripts`, `generate-document`) are **not in the journal repository**, which holds only four. Redeploying from the repo would not recreate them.
+- Not visible to me: the Cloudflare account itself (bucket list, public access, CORS rules, token scopes, DNS/WAF). Those can only be confirmed in the Cloudflare dashboard.
 
-**Important shared fact:** Hearing God's `supabase/config.toml` points at project `jnlvvlkwskidloripvtp`, the **same hosted Supabase project** the Learning Hub uses. Storage buckets, `profiles`, and `auth.users` are shared between the two apps.
+**What can be reused**
+- The **Cloudflare account** and the **R2 service** (already activated and working: a presigned-PUT/GET flow has been verified in production).
+- The **design**: this library follows the same pattern (browser uploads direct to R2 on a short-lived presigned URL, server decides ownership first, keys namespaced by owner). It was written independently in Node (SigV4 presigner in `lib/r2.ts`); Hearing God uses `aws4fetch` in Deno.
+- The same **variable names** (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). They are separate deployments (Vercel vs Supabase secrets), so there is no conflict.
 
-### What can be reused
-- The **Cloudflare account** (billing, DNS zone, WAF, R2 service). Creating R2 in it costs nothing extra to set up.
-- Nothing else: there is no existing bucket, token, Worker or code path for R2.
+**What should stay separate (recommended)**
+- A **new private bucket** in the same account (suggested `dove-voice-recordings`) rather than a prefix inside `dove-media`. R2 API tokens are scoped to a bucket, not to a folder: the token Hearing God holds can read, overwrite and delete *every* object in `dove-media`, including anything under `voice/`, and a Learning Hub token on the same bucket could do the same to Hearing God's journal videos. Separate buckets keep personal journal recordings and student homework apart even if one token leaks.
+- A **new bucket-scoped token** for the Learning Hub only. Do not copy the Hearing God secrets into Vercel.
+- Keys stay namespaced `voice/<student>/<assignment>/<recording id>.<ext>` (already implemented) and the authoritative access rules stay in Supabase (`dp_practice_recordings`); nothing about Voice is stored in `entry_attachments`.
+- Hearing God's `delete` action only allows keys under its own prefix, which is one more reason not to share a prefix scheme.
+- If you would rather share the `dove-media` bucket anyway (one fewer thing to configure), it works technically with prefix `voice/`; the cost is the shared blast radius above. Say so and I will document the prefix-only setup.
 
-### What must stay separate
-- **Never put homework in `entry-attachments`** (public, personal journals) or any journal bucket, and never reuse journal object paths. Journal recordings stay in Supabase Storage under Hearing God's own rules; Voice recordings live in R2 under `voice/<student>/<assignment>/<recording id>.<ext>`, with metadata and access rules only in `dp_practice_recordings`.
-- **A dedicated private R2 bucket** (suggested `dove-voice-recordings`) with no public access, no custom domain, no `r2.dev` URL.
-- **A dedicated bucket-scoped API token** for the Learning Hub only. Do not reuse any AWS/Groq/Gemini/service-role secret; those belong to Hearing God's functions.
-- **Separate Vercel environment variables** for the Learning Hub. Hearing God's edge functions never receive R2 credentials, and the Learning Hub never receives Groq/Gemini/AWS keys.
-- Flagged, not changed: because `entry-attachments` is a public bucket, anyone with an object URL can fetch a personal journal recording. That is outside this PR, but worth a separate review.
-
-### Additional setup needed (nothing done yet; production Cloudflare settings untouched)
-1. Cloudflare dashboard: enable R2 if not yet enabled, create the private bucket, create the bucket-scoped token.
-2. Add the CORS rule (Learning Hub origin(s) only; `GET, PUT, HEAD`; header `Content-Type`; expose `Content-Length`).
-3. Set `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (+ `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`) in the Learning Hub's hosting environment.
-4. If Cloudflare's WAF/bot rules challenge `*.r2.cloudflarestorage.com` uploads from phones (unlikely; that host is not proxied through the site zone), check the security events log during the smoke test.
-5. Optional later: transcription of homework would need a signed GET URL passed to a function; it is not built and not required.
+**Setup still needed (nothing changed in Cloudflare)**
+1. Create the private bucket (no public access, no custom domain, no `r2.dev` URL) in the existing account.
+2. Create a bucket-scoped Object Read & Write token for it.
+3. Add the CORS rule to *that* bucket only: allowed origin = the Learning Hub origin(s); methods `GET, PUT, HEAD`; header `Content-Type`; expose `Content-Length`.
+4. Set `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` in the Learning Hub's hosting environment (never in the repo or chat).
+5. Check that WAF/bot rules on the site zone do not challenge uploads (they go to `*.r2.cloudflarestorage.com`, not the site zone, so this is unlikely).
+6. Run the hosted smoke test in `docs/voice-release-plan.md`.
 
 ## Cost (Cloudflare R2 list pricing; confirm current rates)
 Storage about $0.015 per GB-month, 10 GB free. Class A (writes) $4.50 per million, Class B (reads) $0.36 per million, free tiers apply, **egress is free**.

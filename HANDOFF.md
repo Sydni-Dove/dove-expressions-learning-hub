@@ -204,7 +204,10 @@ confirmed. **Open question:** monthly four-lesson and 12-week prices at 60 minut
 
 ## Update: Oct 30 (recordings on R2, curriculum, intake, assessments, plans)
 - Pricing: single 60-min lesson $65 confirmed; monthly $248 and 12-week $720 (3 x $240) recommended, pending business approval. No store change made.
-- Hearing God (journal app) has NO Cloudflare R2 integration; it records to Supabase Storage (public `entry-attachments` bucket for journal audio). It shares the same Supabase project as the Learning Hub. Voice homework uses a separate private R2 bucket and token. See `docs/voice-recordings-r2.md`.
+- CORRECTION: Hearing God (journal app) DOES use Cloudflare R2, through the deployed edge function `hearing-god-video` (not in the journal repo): video attachments only (1 row so far). Its audio/images use Supabase Storage (public `entry-attachments`). Same Supabase project as the Learning Hub. Voice homework should use a NEW private R2 bucket and a NEW token in the same Cloudflare account. See `docs/voice-recordings-r2.md`.
 - Recording library: 3-5 minute segment recommendation, warning at 8 minutes, hard limit 15, many numbered parts per assignment. Built and tested locally; needs bucket, token, CORS and a hosted smoke test.
 - Curriculum / intake / assessments / plans: see `docs/voice-development-system.md`. Assessment A is waiting for the source document.
 - Migration order (all unapplied): 20261029090000, 20261029100000, 20261029110000, 20261030090000, 20261030100000, 20261030110000.
+
+## Update: Oct 31 (plan revisions, ratings, imports, follow-ups, sample drafts, release plan)
+- New unapplied migration `20261031090000`; rollback scripts for all 7 unapplied Voice migrations in `supabase/rollback/` (generated and tested). Release plan: `docs/voice-release-plan.md`. Pre-flight SQL: `testing/hosted-preflight.sql`.
