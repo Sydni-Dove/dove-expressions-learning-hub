@@ -15,6 +15,7 @@ export default defineConfig({
     { name: "recordings", testMatch: /recordings\.spec\.ts/, use: { ...devices["Desktop Chrome"], permissions: ["microphone"], launchOptions: { ...launchOptions, args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] } } },
     { name: "development", testMatch: /development\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
     { name: "gaps", testMatch: /gaps\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
+    { name: "access", testMatch: /access\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
     { name: "responsive", testMatch: /responsive\.spec\.ts/, use: { launchOptions } }
   ]
 });

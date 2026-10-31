@@ -29,8 +29,8 @@ test.describe.serial("intake, assessments, plan, progress checks", () => {
     await page.goto("/staff/voice/development");
     await studentLink(page).click();
     await expect(page.getByText("I want to grow in ad-libbing")).toBeVisible();
-    await page.getByLabel("Spontaneous Vocal Expression").check();
-    await page.getByLabel("Prophetic Worship Development").check();
+    await page.getByRole("checkbox", { name: "Spontaneous Vocal Expression" }).check();
+    await page.getByRole("checkbox", { name: "Prophetic Worship Development" }).check();
     await page.getByRole("button", { name: "Save approvals" }).click();
     await expect(page.getByText("Approvals saved.")).toBeVisible();
     const opt = page.getByRole("option", { name: /How Does God Speak to You/ });
@@ -38,6 +38,8 @@ test.describe.serial("intake, assessments, plan, progress checks", () => {
     await expect(opt).toContainText("awaiting the source document");
     for (const title of ["Personal Time With God", "Creative Vocal Expression"]) {
       await page.getByLabel("Assign an assessment").selectOption({ label: title });
+      await expect(page.getByRole("button", { name: "Assign", exact: true })).toBeDisabled(); // an instructor's reason is required
+      await page.getByLabel(/Why this fits the student/).fill(`Chosen for this student's goals: ${title}`);
       await page.getByRole("button", { name: "Assign", exact: true }).click();
       await expect(page.getByText("Assigned.")).toBeVisible();
       await page.reload();
@@ -48,7 +50,7 @@ test.describe.serial("intake, assessments, plan, progress checks", () => {
   test("student saves a draft, resumes it, and submits; answers stay private", async ({ browser }) => {
     const { ctx, page } = await login(browser, "voiceOnly");
     await page.goto("/voice/assessments");
-    await expect(page.getByText("Personal Time With God")).toBeVisible();
+    await expect(page.getByText("Personal Time With God", { exact: true })).toBeVisible();
     await page.getByRole("listitem").filter({ hasText: "Personal Time With God" }).getByRole("link", { name: "Start" }).click();
     await expect(page.getByText("You may skip any question")).toBeVisible();
     await page.getByRole("radiogroup", { name: /How often do you currently make intentional time/ }).getByText("Daily", { exact: true }).click();

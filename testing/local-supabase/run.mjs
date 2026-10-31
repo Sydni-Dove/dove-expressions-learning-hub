@@ -20,6 +20,8 @@ export const USERS = {
   instructor: { email: "instructor@fixture.test", name: "Ivy Instructor" },
   admin: { email: "admin@fixture.test", name: "Ada Admin" },
   scopedTeacher: { email: "scoped-teacher@fixture.test", name: "Terry Teacher" },
+  unpaid: { email: "unpaid@fixture.test", name: "Una Unpaid" }, // enrolled in Voice, no payment
+  prospect: { email: "prospect@fixture.test", name: "Pia Prospect" }, // had a consultation, not enrolled, not paid
   stranger: { email: "stranger@fixture.test", name: "Sam Stranger" } // signed in, enrolled in nothing
 };
 
@@ -63,7 +65,7 @@ async function seed() {
   }
   const all = Object.values(ids);
   // Remove anything earlier test runs created, so every run starts from the same fixtures.
-  for (const t of ["dp_voice_import_mappings", "dp_voice_plan_versions", "dp_voice_progress_check_private", "dp_voice_progress_checks", "dp_voice_plan_private", "dp_voice_plan_units", "dp_voice_plans", "dp_voice_assessment_private", "dp_voice_assessments", "dp_voice_intakes", "dp_voice_profiles", "dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
+  for (const t of ["dp_voice_demo_private", "dp_voice_demos", "dp_voice_prospects", "dp_voice_import_mappings", "dp_voice_plan_versions", "dp_voice_progress_check_private", "dp_voice_progress_checks", "dp_voice_plan_private", "dp_voice_plan_units", "dp_voice_plans", "dp_voice_assessment_private", "dp_voice_assessments", "dp_voice_intakes", "dp_voice_profiles", "dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
     "dp_voice_plan_templates", "dp_voice_testimonials", "dp_sessions", "dp_coaching_plans", "dp_unmatched_payments", "dp_package_payments", "dp_coaching_packages", "dp_coaching_tiers", "dp_lesson_access", "dp_consultation_inquiries"])
     await c.query(`delete from ${t}`);
   await c.query("delete from dp_voice_exercises where curriculum_key is null"); // keep the migration-seeded curriculum library
@@ -73,7 +75,10 @@ async function seed() {
   const voice = await prog("vocal-coaching");
   const creative = await prog("stationery-product-creation-roadmap");
   const enroll = (u, p) => c.query("insert into dp_enrollments(user_id,scope_type,scope_id,status) values ($1,'program',$2,'active')", [u, p]);
-  await enroll(ids.voiceOnly, voice); await enroll(ids.creative, creative); await enroll(ids.multi, voice); await enroll(ids.multi, creative);
+  await enroll(ids.voiceOnly, voice); await enroll(ids.unpaid, voice); await enroll(ids.creative, creative); await enroll(ids.multi, voice); await enroll(ids.multi, creative);
+  // Verified-paid WooCommerce coaching package for the main Voice student fixture (what an attributed, verified payment produces). `unpaid` and `prospect` have none.
+  for (const u of [ids.voiceOnly]) // `multi` pays through the real webhook flow inside the store-payment tests; `unpaid` and `prospect` never pay
+    await c.query("insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,installments_total,installments_paid,source,assessments_included,expires_at,external_order_id,external_line_item_id) values ($1,$2,45,1,'paid',1,1,'woocommerce',6,now()+interval '120 days',$3,'1')", [u, voice, "fixture-paid-" + u.slice(0, 8)]);
   await c.query("insert into dp_user_roles(user_id,role) values ($1,'faculty'),($2,'super_admin'),($3,'teacher')", [ids.instructor, ids.admin, ids.scopedTeacher]);
   // The scoped teacher is a class teacher of a non-voice course only.
   const other = (await c.query("select id from dp_courses where program_id=$1 limit 1", [creative])).rows[0];

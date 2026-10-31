@@ -210,7 +210,8 @@ test.describe("4. Student resource area (voice-only student)", () => {
     await page.goto("/voice/resources");
     await expect(page.getByText(PLAN)).toHaveCount(0);
     await expect(page.getByText("Sing the bridge in tune")).toHaveCount(0);
-    await expect(page.getByText("Build breath stamina")).toBeVisible();
+    // this student has not paid yet, so coaching resources (including their own goals) wait for verified payment
+    await expect(page.getByText("opens after your payment is confirmed")).toBeVisible();
     await page.goto("/voice");
     await expect(page.getByText("Lessons remaining").locator("..").locator("..")).toContainText("—");
     await ctx.close();

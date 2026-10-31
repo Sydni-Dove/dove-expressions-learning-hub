@@ -8,7 +8,7 @@ Status: **plan only. Nothing has been applied, deployed or configured.** PR #3 s
 
 **Hosted project** (`jnlvvlkwskidloripvtp`, shared with Hearing God): last applied migration is `20261028193254`. Repo numbering (`0001…0031`) differs from hosted timestamps, so **`supabase db push` must not be used**; apply one file at a time with the Supabase tool (`apply_migration`), then confirm with `list_migrations`.
 
-**Conflicts: none.** None of the 28 tables/views the release creates exist on hosted; none of the `dp_private`/`public` functions it creates or replaces exist; the voice storage buckets are absent. Hosted-only items the repo does not hold (left untouched): migration `dp_security_hardening`, the combined `20261028164738 dp_voice_draft_curriculum_and_testimonials`, and the Hearing God edge functions (see `docs/voice-recordings-r2.md`).
+**Conflicts: none.** None of the 31 tables/views the release creates exist on hosted; none of the `dp_private`/`public` functions it creates or replaces exist; the voice storage buckets are absent. Hosted-only items the repo does not hold (left untouched): migration `dp_security_hardening`, the combined `20261028164738 dp_voice_draft_curriculum_and_testimonials`, and the Hearing God edge functions (see `docs/voice-recordings-r2.md`).
 
 **Live data the release can touch (counts today):** `dp_sessions` 0 · `dp_submissions` 0 · `dp_assignment_progress` 0 · `dp_voice_testimonials` 0 · Voice lesson blocks 0 · Voice program enrollments 0 · `dp_assignments` 4 · voice storage objects 0. So today almost nothing can be lost; the backup rules below are written for the moment real students exist.
 
@@ -34,6 +34,7 @@ PR #2 migrations (20261028*, already on hosted)
                  └─ 20261030100000  profiles, intake, assessments, plans, progress checks   (needs dp_practice_recordings, dp_voice_exercises, dp_assign_weekly_plan)
                       ├─ 20261030110000  curriculum seed (74 exercises, skills)       (needs curriculum_key/visibility columns)
                       └─ 20261031090000  plan revisions, ratings, import mappings, follow-ups   (needs everything above)
+                           └─ 20261101090000  onboarding + payment access, Vocal Demo         (replaces policies/functions from #3, #5, #7)
 ```
 Verified by replaying all migrations in order from an empty database (and again after a full rollback). The seed file is generated from `lib/voice-curriculum` and a unit test fails if it drifts.
 
@@ -50,6 +51,7 @@ For every migration: run the **pre-check**, apply it by itself (one transaction)
 | 5 | `20261030100000_dp_voice_intake_assessments_plans` | profiles, intake, assessments (+private), plans, progress checks | No (new objects; alters only tables created in #3) | Yes after use: intakes, answers, plans, checks | 9 tables, RLS on | Student completes intake and an assessment; instructor reviews privately; plan approved |
 | 6 | `20261030110000_dp_voice_curriculum_seed` | 74 library exercises, 9 more skills | No (seed rows into library tables) | Seeded rows only; exercises already assigned are copied into assignments and keep working | 74 exercises with `curriculum_key`; 3 track skills inactive | Student cannot list unassigned curriculum or `track-%` skills |
 | 7 | `20261031090000_dp_voice_plan_revisions_ratings_imports` | plan versions, ratings validation, mapped imports, follow-ups, sample safeguards | No (changes only objects created in #4–#5; one function dropped and recreated) | Yes after use: plan history, saved mappings | `dp_plan_revise`, `dp_recording_assign_followup` exist | Revise an approved plan (assigned lessons locked); import the same CSV twice → second adds 0 |
+| 8 | `20261101090000_dp_voice_onboarding_payment_access` | prospects (intake before payment), `voice_paid` rules, Vocal Demo tables, payment triggers on assessments/recordings/new practice/plan approval, paid-only resource policies | **Recommended (small): `pg_dump -t dp_assignments` and the policy list.** It adds one trigger to the existing `dp_assignments` table and replaces policies on tables created by #3, #5 | Yes after use: invited prospects, Vocal Demo entries | `dp_voice_prospects`, `dp_voice_demos` exist; trigger `dp_voice_practice_assignment_gate` on `dp_assignments` | An unpaid enrolled student: intake works, assessments/recordings/resources locked; after a verified payment the instructor can assign one assessment with a reason; refund closes new work, keeps records |
 
 **Backups, plainly:** a backup is *required* before migrations 1, 2 and 3 (they change existing tables or permissions), and before **any** rollback once students have used the system (rollbacks drop tables). Migrations 4–7 only add objects, so no backup is needed to *apply* them. Recommended anyway: one dated backup before step 1, because the project also holds production Hearing God data that these migrations do not touch but a project-level restore would.
 
@@ -59,7 +61,7 @@ How to back up (pick one, record where it is stored): Supabase **Point-in-Time R
 1. Owner approval in writing; PR #3 marked ready by the owner (not by me).
 2. Run `testing/hosted-preflight.sql`; confirm every "already present" count is 0 and the last migration is `20261028193254`. Save the ACL snapshot.
 3. Take the backups in Section 3.
-4. Apply migrations 1 → 7, one at a time, post-check and smoke test each. Do not batch.
+4. Apply migrations 1 → 8, one at a time, post-check and smoke test each. Do not batch.
 5. Cloudflare: create the private bucket, token and CORS rule; set the Vercel environment variables (`docs/voice-recordings-r2.md`). Until then the recording routes answer "not configured" and nothing else is affected.
 6. **Then** deploy the app. The new pages call the new functions; deploying first would show errors on those routes. Deploy to preview, smoke-test, then production.
 7. Run the full smoke checklist below with a real test student and a real instructor account.
@@ -69,9 +71,9 @@ How to back up (pick one, record where it is stored): Supabase **Point-in-Time R
 
 ## 5. Rollback and recovery procedures
 
-**Principles.** Each rollback script runs in one transaction (all or nothing), is generated from a before/after schema diff, and is proven by `tests/sql/rollback.test.ts`: applying all seven migrations and then each rollback in reverse restores the exact schema, policies, triggers, function bodies and permissions, and every pre-existing row (including an instructor's edited draft block); re-applying afterwards reproduces the same result. They have **never been run on the hosted project**.
+**Principles.** Each rollback script runs in one transaction (all or nothing), is generated from a before/after schema diff, and is proven by `tests/sql/rollback.test.ts`: applying all eight migrations and then each rollback in reverse restores the exact schema, policies, triggers, function bodies and permissions, and every pre-existing row (including an instructor's edited draft block); re-applying afterwards reproduces the same result. They have **never been run on the hosted project**.
 
-**Roll back in reverse order only** (7 → 1). To undo just the newest work, run only the newest scripts (tested: rolling back 7, 6 and 5 leaves 1–4 working).
+**Roll back in reverse order only** (8 → 1). To undo just the newest work, run only the newest scripts (tested: rolling back 8, 7, 6 and 5 leaves 1–4 working).
 
 | If this happens | Do this |
 |---|---|

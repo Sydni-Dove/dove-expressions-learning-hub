@@ -6,7 +6,7 @@ export const F = JSON.parse(fs.readFileSync(path.join(__dirname, "../../testing/
   ids: Record<string, string>; password: string; users: Record<string, { email: string; name: string }>;
   fixtures: Record<"voice" | "creative", { courseId: string; lessons: Record<"open" | "gated", { id: string; file: string }> }>;
 };
-export type Who = "voiceOnly" | "creative" | "multi" | "instructor" | "admin" | "scopedTeacher" | "stranger";
+export type Who = "voiceOnly" | "creative" | "multi" | "instructor" | "admin" | "scopedTeacher" | "stranger" | "unpaid" | "prospect";
 export const API = "http://localhost:54321";
 export const ANON = fs.readFileSync(path.join(__dirname, "../../testing/local-supabase/anon.txt"), "utf8").trim();
 

@@ -211,3 +211,8 @@ confirmed. **Open question:** monthly four-lesson and 12-week prices at 60 minut
 
 ## Update: Oct 31 (plan revisions, ratings, imports, follow-ups, sample drafts, release plan)
 - New unapplied migration `20261031090000`; rollback scripts for all 7 unapplied Voice migrations in `supabase/rollback/` (generated and tested). Release plan: `docs/voice-release-plan.md`. Pre-flight SQL: `testing/hosted-preflight.sql`.
+
+## Update: Nov 1 (onboarding + payment access rules, Vocal Demo baseline)
+- Confirmed decision: intake and the Vocal Demo BEFORE payment; assessments, recordings, resources, new practice AFTER verified WooCommerce payment. New unapplied migration `20261101090000`; rules and decisions in `docs/voice-access-rules.md`.
+- No separate technical assessment after purchase: the Vocal Demo is the technical baseline and the baseline for progress comparisons. After payment only specialized assessments, each chosen by the instructor with a reason.
+- Open decisions: offline/complimentary payments are not counted as verified; tiers must set `assessments_included` (default 0); enrollment is still manual.

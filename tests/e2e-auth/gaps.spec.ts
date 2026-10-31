@@ -177,7 +177,7 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     const save = async (kind: string, week: string, ratings: Record<string, string>, share: boolean) => {
       await page.getByLabel("Week", { exact: true }).fill(week);
       await page.getByLabel("Kind").selectOption({ label: kind });
-      for (const [area, v] of Object.entries(ratings)) await page.getByLabel(`Rating for ${area}`).selectOption({ index: Number(v) });
+      for (const [area, v] of Object.entries(ratings)) await page.getByLabel(`Rating for ${area}`, { exact: true }).selectOption({ index: Number(v) });
       if (share) await page.getByLabel("Share with the student now").check(); else await page.getByLabel("Share with the student now").uncheck();
       await page.getByRole("button", { name: "Save progress check" }).click();
       await expect(page.getByText(share ? "Saved and shared." : "Saved privately.")).toBeVisible();
