@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { execSync } from "node:child_process";
 import { F, login, rest } from "./helpers";
 
 const rpc = async (who: "voiceOnly" | "instructor", name: string, args: object) => {
@@ -7,12 +8,16 @@ const rpc = async (who: "voiceOnly" | "instructor", name: string, args: object) 
   const t = await r.text(); return t ? JSON.parse(t) : null; // void functions return an empty body
 };
 const wav = () => { const n = 4000, b = Buffer.alloc(44 + n * 2); b.write("RIFF", 0); b.writeUInt32LE(36 + n * 2, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40); return b; };
+const TITLE = "Gap follow-up take";
 const dueIn = (d: number) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
 const studentLink = (page: Page) => page.getByRole("main").getByRole("link", { name: F.users.voiceOnly.name });
 
 test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sample drafts", () => {
+  // These tests assume a clean slate for the two Voice students, so earlier specs' plans, recordings and intakes are reset first (fixtures only, local stack).
+  test.beforeAll(() => { execSync("node testing/local-supabase/run.mjs seed", { stdio: "pipe", timeout: 120000 }); });
+
   test("Google Forms import: suggests a mapping from different wording, previews, saves the mapping, and repeat imports add nothing", async ({ browser }) => {
-    const email = F.users.voiceOnly.email;
+    const email = F.users.multi.email;
     const csv = [
       `Timestamp,Email,"Why are you here? What do you want from lessons?","Tell us about your voice background","Which Creative Worship tracks appeal to you?",Favourite colour`,
       `10/30/2026 9:00:00,${email},"Ad-libbing, harmony and confidence","Church choir for 5 years","Spontaneous Vocal Expression",blue`,
@@ -32,7 +37,8 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     await expect(page.getByText(/Preview: 1 new · 0 already imported · 1 not enrolled · 0 invalid/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Import 1 new response" })).toBeVisible();
     // nothing is written by a preview
-    expect(await (await rest("instructor", "dp_voice_intakes?select=id")).json()).toEqual([]);
+    const imported = async () => (await (await rest("instructor", `dp_voice_intakes?select=id,source,answers,import_key&source=eq.google_forms_import&student_id=eq.${F.ids.multi}`)).json()) as any[];
+    expect(await imported()).toEqual([]);
     // instructor corrects a column and saves the mapping
     await page.getByLabel("Map column Favourite colour").selectOption("notes");
     await page.getByLabel("Save this mapping as").fill("Fall intake form");
@@ -40,7 +46,7 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     await expect(page.getByText(/Mapping "Fall intake form" saved/)).toBeVisible();
     await page.getByRole("button", { name: "Import 1 new response" }).click();
     await expect(page.getByLabel("Import results")).toContainText(`${email}: imported`);
-    const rows = await (await rest("instructor", "dp_voice_intakes?select=id,source,answers,import_key")).json();
+    const rows = await imported();
     expect(rows).toHaveLength(1);
     expect(rows[0].answers.goals).toBe("Ad-libbing, harmony and confidence");
     expect(rows[0].answers.notes).toBe("blue");
@@ -52,9 +58,9 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     await expect(page.getByLabel("Map column Favourite colour")).toHaveValue("notes"); // the saved mapping was applied
     await expect(page.getByText(/0 new · 1 already imported/)).toBeVisible();
     await expect(page.getByRole("button", { name: /Import 0 new/ })).toBeDisabled();
-    expect(await (await rest("instructor", "dp_voice_intakes?select=id")).json()).toHaveLength(1);
+    expect(await imported()).toHaveLength(1);
     // an import records the student's own track choice but does NOT approve it
-    const prof = (await (await rest("instructor", "dp_voice_profiles?select=selected_tracks,approved_tracks")).json())[0];
+    const prof = (await (await rest("instructor", `dp_voice_profiles?select=selected_tracks,approved_tracks&student_id=eq.${F.ids.multi}`)).json())[0];
     expect(prof).toEqual({ selected_tracks: ["spontaneous_expression"], approved_tracks: [] });
     await ctx.close();
   });
@@ -63,21 +69,23 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     const stu = await login(browser, "voiceOnly");
     await stu.page.goto("/voice/recordings");
     await stu.page.locator("input[type=file]").setInputFiles({ name: "take.wav", mimeType: "audio/wav", buffer: wav() });
+    await stu.page.getByLabel("Title (optional)").fill(TITLE);
     await stu.page.getByRole("button", { name: "Save privately" }).click();
     await expect(stu.page.getByText("Saved privately. Submit it for feedback")).toBeVisible({ timeout: 20000 });
-    await stu.page.getByRole("button", { name: "Submit for feedback" }).click();
-    await expect(stu.page.getByText("Submitted", { exact: true })).toBeVisible({ timeout: 15000 });
+    const mine = stu.page.getByRole("listitem").filter({ hasText: TITLE });
+    await mine.getByRole("button", { name: "Submit for feedback" }).click();
+    await expect(mine.getByText("Submitted", { exact: true })).toBeVisible({ timeout: 15000 });
     await stu.ctx.close();
 
     const inst = await login(browser, "instructor");
     await inst.page.goto("/staff/voice/recordings");
-    const waiting = inst.page.getByRole("region", { name: /Waiting for review/ });
+    const waiting = inst.page.getByRole("region", { name: /Waiting for review/ }).getByRole("listitem").filter({ hasText: TITLE });
     await waiting.getByLabel("Feedback").fill("Lovely tone. Work on a steadier breath.");
     await waiting.getByLabel("Assign an exercise (optional)").selectOption({ label: "Quiet low breath and steady 'ssss'" });
     await expect(waiting.getByRole("button", { name: "Send feedback" })).toBeDisabled(); // an exercise needs a due date
     await waiting.getByLabel("Due").fill(dueIn(5));
     await waiting.getByRole("button", { name: "Send feedback" }).click();
-    const reviewed = inst.page.getByRole("region", { name: /Reviewed/ });
+    const reviewed = inst.page.getByRole("region", { name: /Reviewed/ }).getByRole("listitem").filter({ hasText: TITLE });
     await expect(reviewed.getByText(/Follow-up exercise assigned/)).toBeVisible({ timeout: 15000 });
     // a second exercise from the already-reviewed recording (feedback history is appended, not replaced)
     await reviewed.getByLabel("Assign a follow-up exercise").selectOption({ label: "Counted breath into a hum" });
@@ -89,7 +97,7 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
     const stu2 = await login(browser, "voiceOnly");
     await stu2.page.goto("/voice/recordings");
     await expect(stu2.page.getByText("Lovely tone. Work on a steadier breath.")).toBeVisible();
-    await expect(stu2.page.getByRole("link", { name: "Open the assigned exercise" })).toHaveCount(2);
+    await expect(stu2.page.getByRole("listitem").filter({ hasText: TITLE }).getByRole("link", { name: "Open the assigned exercise" })).toHaveCount(2);
     const asg = await (await rest("voiceOnly", "dp_assignments?select=title,practice_items&title=like.Follow-up*")).json();
     expect(asg.map((a: any) => a.title).sort()).toEqual(["Follow-up: Counted breath into a hum", "Follow-up: Quiet low breath and steady 'ssss'"]);
     // another student cannot see the feedback or the assignments
@@ -98,8 +106,10 @@ test.describe.serial("gap round: imports, plan revision, ratings, follow-ups, sa
   });
 
   test("an optional-track exercise cannot be assigned from a recording unless chosen and approved", async () => {
+    // whatever earlier tests approved, make sure this student has NO approved optional track now (ignored if they have no profile yet)
+    await rest("instructor", "rpc/dp_voice_approve_tracks", { method: "POST", body: JSON.stringify({ student: F.ids.voiceOnly, tracks: [] }) });
     const lib = await (await rest("instructor", "dp_voice_exercises?select=id&curriculum_key=eq.abide-time")).json();
-    const rec = (await (await rest("voiceOnly", "dp_practice_recordings?select=id&status=eq.reviewed")).json())[0];
+    const rec = (await (await rest("voiceOnly", `dp_practice_recordings?select=id&status=eq.reviewed&title=eq.${encodeURIComponent(TITLE)}`)).json())[0];
     const r = await rest("instructor", "rpc/dp_recording_assign_followup", { method: "POST", body: JSON.stringify({ rid: rec.id, exercise: lib[0].id, due: dueIn(3) }) });
     expect(r.status).toBeGreaterThanOrEqual(400);
     expect(await r.text()).toMatch(/not available for this student/);
