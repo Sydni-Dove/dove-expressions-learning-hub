@@ -12,7 +12,7 @@ const PLAN = "Week of Nov 2 – foundations";
 const REC = Buffer.concat([Buffer.from([0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32]), Buffer.alloc(2048, 7)]);
 
 test.describe("1. Login and dashboard routing", () => {
-  const expected: Record<Who, string> = { voiceOnly: "/voice", creative: "/creative-studio", multi: "/dashboard", instructor: "/dashboard", admin: "/dashboard", scopedTeacher: "/dashboard", stranger: "/dashboard" };
+  const expected: Record<Who, string> = { voiceOnly: "/voice", creative: "/creative-studio", multi: "/dashboard", instructor: "/dashboard", admin: "/dashboard", scopedTeacher: "/dashboard", unpaid: "/voice", prospect: "/dashboard", stranger: "/dashboard" };
   for (const who of Object.keys(expected) as Who[]) {
     test(`${who} lands on ${expected[who]}`, async ({ browser }) => {
       const { ctx, page } = await login(browser, who);

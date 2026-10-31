@@ -23,7 +23,7 @@ Status: built and tested locally. **Not deployed. Migrations `20261030100000` an
 ## Privacy and gating rules (all enforced in the database, not just the UI)
 - Faith-related answers are visible to the student and authorised Voice staff only. Observations, private notes and plan rationale are in separate staff-only tables.
 - Nothing is scored, ranked or used to label spiritual maturity. Personal Time With God is a plain restatement grouped by purpose.
-- Personal Time With God (and Assessment A, once supplied) can be assigned only if the student chose Prophetic Worship Development.
+- Personal Time With God (and Assessment A, once supplied) can be assigned only if the student chose Prophetic Worship Development **and** the instructor authorized it, after verified payment (`docs/voice-access-rules.md`).
 - An optional track enters a plan only when the student chose it **and** the instructor approved it. A sample plan is exempt; copying a sample to a student re-checks this.
 - Singing in tongues: never auto-selected (`onlyOnRequest`), and `dp_plan_save` / `dp_plan_assign_unit` refuse it unless the student ticked the request.
 - Seeded curriculum exercises are staff-only until assigned (`visibility='assigned_only'`; track skills hidden). Students see only the practice assigned to them.
@@ -47,3 +47,6 @@ Reused, not duplicated: `dp_assignments`/`dp_assign_weekly_plan` (practice), `dp
 
 ## Tests
 Unit `tests/unit/voice-curriculum.test.ts`, `voice-assessments.test.ts` (wording preserved, gating, CSV import, plan logic, Stephanie). SQL `tests/sql/voice-development.test.ts` (17). Browser `tests/e2e-auth/development.spec.ts` (8). Tests found and fixed two real defects: the plan draft could auto-assign the tongues exercise, and a variable named `id` shadowed a column in `dp_plan_save`.
+
+
+**Superseded in part (Nov 1):** the access and payment rules, the Vocal Demo baseline and the 'no separate technical assessment' decision are in `docs/voice-access-rules.md`.
