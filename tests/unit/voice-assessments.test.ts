@@ -23,12 +23,22 @@ describe("Personal Time With God", () => {
   it("is offered only when the student chose Prophetic Worship Development", () => {
     expect(assignableKinds([])).toEqual(["creative_expression"]);
     expect(assignableKinds(["worship_leadership"])).toEqual(["creative_expression"]);
-    expect(assignableKinds(["prophetic_worship"])).toContain("personal_time");
+    expect(assignableKinds(["prophetic_worship"])).not.toContain("personal_time"); // the student's choice alone is not enough
+    expect(assignableKinds([], ["prophetic_worship"])).not.toContain("personal_time"); // neither is the instructor's approval alone
+    expect(assignableKinds(["prophetic_worship"], ["prophetic_worship"])).toContain("personal_time");
   });
   it("keeps the tongues follow-up out of the general intake and the assessment", () => {
     expect(TONGUES_FOLLOW_UP.length).toBe(2);
     const text = JSON.stringify([INTAKE_QUESTIONS, PERSONAL_TIME]).toLowerCase();
     expect(text.includes("tongues")).toBe(false);
+  });
+});
+
+describe("no separate technical assessment after purchase", () => {
+  it("offers only specialized assessments; the technical baseline is the consultation Vocal Demo", () => {
+    expect(Object.keys(ASSESSMENTS).sort()).toEqual(["creative_expression", "hearing_god", "personal_time"]);
+    const text = JSON.stringify(Object.values(ASSESSMENTS).map((a) => a.title)).toLowerCase();
+    expect(text).not.toMatch(/technical|pitch accuracy|breath/);
   });
 });
 
@@ -49,7 +59,7 @@ describe("Assessment A (How Does God Speak to You?)", () => {
   it("is not assignable and has no invented questions until the source is supplied", () => {
     expect(ASSESSMENTS.hearing_god.status).toBe("awaiting_source");
     expect(ASSESSMENTS.hearing_god.sections).toEqual([]);
-    expect(assignableKinds(["prophetic_worship"])).not.toContain("hearing_god");
+    expect(assignableKinds(["prophetic_worship"], ["prophetic_worship"])).not.toContain("hearing_god");
   });
   it("imports a supplied source verbatim and reports prominent categories, allowing several", () => {
     // Synthetic fixture only: labels are placeholders, NOT the owner's wording or categories.
@@ -115,6 +125,17 @@ describe("personalized plan draft", () => {
       expect(u.exerciseKeys.every((k) => area.exercises.some((e) => e.key === k))).toBe(true);
       expect(u.exerciseKeys).not.toContain("optional-tongues");
     }
+  });
+});
+
+describe("plan built from the Vocal Demo baseline", () => {
+  it("starts where the demo found the student, and the demo is overridden only by the instructor's own observations", () => {
+    const p = draftPlan({ packageType: "monthly", demo: { range: 1, "pitch-ear": 2, "posture-breath": 5, agility: 4 } });
+    expect(p.units[0].areaKey).toMatch(/range|pitch-ear/);
+    expect(p.units[0].level).toBe("beginner");
+    expect(p.basis).toContain("Vocal Demo (baseline)");
+    const override = draftPlan({ packageType: "monthly", demo: { range: 1 }, observed: { range: "advanced" } });
+    expect(override.units.find((u) => u.areaKey === "range")?.level ?? "advanced").not.toBe("beginner");
   });
 });
 

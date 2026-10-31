@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { createDb, asUser } from "./harness";
+import { createDb, asUser, grantPaid } from "./harness";
 
 const id = (n: number) => `f3f30000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = id(1), B = id(2), STRANGER = id(3), FAC = id(6);
@@ -23,6 +23,7 @@ beforeAll(async () => {
    insert into dp_enrollments(user_id,scope_type,scope_id,status)
      select u,'program',(select id from dp_programs where slug='vocal-coaching'),'active' from unnest(array['${A}','${B}']::uuid[]) u;
   `);
+  await grantPaid(db, A); await grantPaid(db, B);
 }, 120000);
 afterAll(async () => { await db.close(); });
 
@@ -77,12 +78,13 @@ describe("intake (separate from assessments)", () => {
 describe("assessments", () => {
   let personal: string, creative: string;
   it("gates assignment: Personal Time needs the prophetic track; Assessment A cannot be assigned", async () => {
-    expect(await denied(FAC, `select dp_assessment_assign('${B}','personal_time')`)).toMatch(/Prophetic Worship Development/);
-    expect(await denied(FAC, `select dp_assessment_assign('${A}','hearing_god')`)).toMatch(/source wording/);
-    expect(await denied(A, `select dp_assessment_assign('${A}','creative_expression')`)).toMatch(/Not authorized/);
-    personal = (await q(FAC, `select dp_assessment_assign('${A}','personal_time') id`)).rows[0].id;
-    creative = (await q(FAC, `select dp_assessment_assign('${A}','creative_expression') id`)).rows[0].id;
-    expect(await denied(FAC, `select dp_assessment_assign('${A}','personal_time')`)).toMatch(/unique|duplicate/i);
+    expect(await denied(FAC, `select dp_assessment_assign('${B}','personal_time','fits their goals')`)).toMatch(/Prophetic worship assessments need/);
+    await q(FAC, `select dp_voice_approve_tracks('${A}', array['spontaneous_expression','prophetic_worship'])`); // the student chose it; now the instructor authorizes it
+    expect(await denied(FAC, `select dp_assessment_assign('${A}','hearing_god','fits their goals')`)).toMatch(/source wording/);
+    expect(await denied(A, `select dp_assessment_assign('${A}','creative_expression','fits their goals')`)).toMatch(/Not authorized/);
+    personal = (await q(FAC, `select dp_assessment_assign('${A}','personal_time','fits their goals') id`)).rows[0].id;
+    creative = (await q(FAC, `select dp_assessment_assign('${A}','creative_expression','fits their goals') id`)).rows[0].id;
+    expect(await denied(FAC, `select dp_assessment_assign('${A}','personal_time','fits their goals')`)).toMatch(/unique|duplicate/i);
   });
   it("saves drafts, resumes, submits, and is then locked", async () => {
     await q(A, `select dp_assessment_save('${personal}','{"q1":"Daily"}'::jsonb)`);
@@ -116,6 +118,7 @@ describe("assessments", () => {
 describe("development plans", () => {
   let plan: string, unitId: string;
   it("rejects optional-track units unless the student chose AND the instructor approved", async () => {
+    await q(FAC, `select dp_voice_approve_tracks('${A}', array[]::text[])`);
     expect(await denied(FAC, `select dp_plan_save(null,'${A}','P','monthly','${JSON.stringify([unit(1, "track-prophetic-worship")])}'::jsonb,'{}','{}','{}',null)`)).toMatch(/choice and your approval/);
     await q(FAC, `select dp_voice_approve_tracks('${A}', array['spontaneous_expression','prophetic_worship'])`);
     expect(await denied(FAC, `select dp_plan_save(null,'${A}','P','monthly','${JSON.stringify([unit(1, "track-worship-leadership")])}'::jsonb,'{}','{}','{}',null)`)).toMatch(/choice and your approval/);

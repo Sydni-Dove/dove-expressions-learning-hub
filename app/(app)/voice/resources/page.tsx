@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { getStudentPrograms } from "@/lib/student-programs";
+import PaymentNotice from "@/components/voice/PaymentNotice";
+import { getMyAccess } from "@/lib/voice-access";
 import GoalProgressForm from "@/components/voice/GoalProgressForm";
 import { ProgressBar, Pill } from "@/components/ui";
 import { ArrowUpRight, BookOpen, ClipboardList, Target, PlayCircle } from "lucide-react";
@@ -17,6 +19,10 @@ export default async function VoiceResourcesPage() {
   const isStudent = (await getStudentPrograms(user.id)).includes("voice");
   if (!isStaff && !isStudent) redirect("/dashboard");
   const supabase = createClient();
+  if (!isStaff) {
+    const access = await getMyAccess(supabase);
+    if (!access.paid) return <div className="space-y-6 pb-20"><h1 className="font-display text-4xl text-burgundy">Practice resources</h1><PaymentNotice status={access.status} what="Your coaching resources" /></div>;
+  }
 
   const [content, skillsRes, exRes, plansRes, goalsRes] = await Promise.all([
     supabase.from("dp_voice_resource_content").select("key,title,body"),

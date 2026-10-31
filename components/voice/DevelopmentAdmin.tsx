@@ -42,16 +42,66 @@ export function TrackApproval({ studentId, selected, approved, tongues }: { stud
   );
 }
 
-export function AssignAssessment({ studentId, selected }: { studentId: string; selected: TrackKey[] }) {
-  const ok = assignableKinds(selected); const { run, busy, status } = useAct(); const [kind, setKind] = useState<AssessmentKind | "">("");
+export interface Access { enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string }
+const STATUS_TEXT: Record<string, string> = { none: "no package yet", pending: "payment pending", partial: "installments in progress", paid: "paid", refunded: "refunded", failed: "payment failed", complimentary: "complimentary (not a verified payment)" };
+export function AccessBadge({ a }: { a: Access }) {
+  return <span className={`rounded-full px-2.5 py-1 font-ui text-xs font-semibold ${a.paid ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"}`}>{a.enrolled ? "Enrolled" : a.prospect ? "Invited for intake" : "Not enrolled"} · {a.paid ? "paid access verified" : `no verified payment (${STATUS_TEXT[a.paid_status] ?? a.paid_status})`}</span>;
+}
+
+export function AssignAssessment({ studentId, selected, approved, access }: { studentId: string; selected: TrackKey[]; approved: TrackKey[]; access: Access }) {
+  const ok = assignableKinds(selected, approved); const { run, busy, status } = useAct(); const [kind, setKind] = useState<AssessmentKind | "">(""); const [reason, setReason] = useState("");
+  const blocked = !access.enrolled ? "This person is not enrolled in Voice yet." : !access.paid ? "Assessments open after verified payment. This student has no paid, current coaching package yet." : "";
   return (
     <div className="space-y-2">
+      <p className="font-body text-sm text-[#4a3a3a]">Assessments are specialized and chosen one at a time for this student&apos;s interests and goals. The technical baseline is the Vocal Demo from the consultation, so there is no separate technical assessment.</p>
+      {blocked && <p role="note" className="rounded-xl bg-amber-50 p-3 font-body text-sm text-amber-900">{blocked}</p>}
       <label className="font-ui text-sm font-semibold text-[#630000]">Assign an assessment
-        <select className={field} value={kind} onChange={(e) => setKind(e.target.value as AssessmentKind)}>
+        <select className={field} value={kind} disabled={!!blocked} onChange={(e) => setKind(e.target.value as AssessmentKind)}>
           <option value="">Choose…</option>
-          {Object.values(ASSESSMENTS).map((d) => <option key={d.kind} value={d.kind} disabled={!ok.includes(d.kind)}>{d.title}{d.status === "awaiting_source" ? " — awaiting the source document" : d.requiresTrack && !ok.includes(d.kind) ? " — student has not chosen Prophetic Worship Development" : ""}</option>)}
+          {Object.values(ASSESSMENTS).map((d) => <option key={d.kind} value={d.kind} disabled={!ok.includes(d.kind)}>{d.title}{d.status === "awaiting_source" ? " — awaiting the source document" : d.requiresTrack && !ok.includes(d.kind) ? " — needs the student's choice of Prophetic Worship Development and your approval" : ""}</option>)}
         </select></label>
-      <button className={btn} disabled={busy || !kind} onClick={() => run("dp_assessment_assign", { student: studentId, assessment_kind: kind }, "Assigned.")}>Assign</button>{status}
+      <label className="block font-ui text-sm font-semibold text-[#630000]">Why this fits the student (shown to them)
+        <input className={field} value={reason} disabled={!!blocked} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="e.g. They want to grow in ad-libbing over worship songs" /></label>
+      <button className={btn} disabled={busy || !kind || !reason.trim() || !!blocked} onClick={() => run("dp_assessment_assign", { student: studentId, assessment_kind: kind, reason }, "Assigned.")}>Assign</button>{status}
+    </div>
+  );
+}
+
+export interface DemoEntry { id: string; observed_at: string; ratings: Record<string, number>; strengths: string | null; next_focus: string | null; shared_at: string | null; notes?: string | null }
+const CORE = ALL_AREAS.filter((a) => !a.track);
+/** The Vocal Demo recorded at the consultation (before payment). It becomes the technical baseline; saving again adds a new entry and keeps the history. */
+export function DemoForm({ studentId, history }: { studentId: string; history: DemoEntry[] }) {
+  const { run, busy, status } = useAct();
+  const [ratings, setRatings] = useState<Record<string, number>>({}); const [good, setGood] = useState(""); const [focus, setFocus] = useState(""); const [priv, setPriv] = useState(""); const [share, setShare] = useState(false);
+  return (
+    <div className="space-y-3">
+      <p className="font-body text-sm text-[#4a3a3a]">Record what you heard in the consultation&apos;s Vocal Demo. This is the starting point for the plan and for every later progress check. It needs no payment and unlocks nothing.</p>
+      {history.length > 0 && (
+        <ul className="space-y-2" aria-label="Vocal Demo history">{history.map((d, i) => (
+          <li key={d.id} className="rounded-xl bg-[#FBF4F1] p-3 font-body text-sm"><p className="font-semibold">{i === 0 ? "Current baseline" : "Earlier entry"} · {new Date(d.observed_at).toLocaleDateString()}{d.shared_at ? " · shared with student" : " · private"}</p>
+            <p>{CORE.filter((a) => d.ratings[a.key]).map((a) => `${a.title}: ${d.ratings[a.key]}`).join(" · ")}</p>{d.strengths && <p>Strengths: {d.strengths}</p>}{d.next_focus && <p>Focus: {d.next_focus}</p>}{d.notes && <p className="text-[#4a3a3a]">Private: {d.notes}</p>}</li>))}</ul>)}
+      <fieldset className="space-y-2"><legend className="font-ui text-sm font-semibold text-[#630000]">Rate the skills you observed (1 = just starting, 5 = strong; leave blank if not heard)</legend>
+        {CORE.map((a) => (
+          <label key={a.key} className="flex flex-wrap items-center gap-3 font-body text-sm"><span className="min-w-[10rem] flex-1">{a.title}</span>
+            <select aria-label={`Demo rating for ${a.title}`} className={`${field} !mt-0 !w-auto`} value={ratings[a.key] ?? ""} onChange={(e) => { const v = e.target.value; setRatings((r) => { const n = { ...r }; if (v) n[a.key] = Number(v); else delete n[a.key]; return n; }); }}>
+              <option value="">Not rated</option>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} · {RATING_LABELS[n]}</option>)}</select></label>))}
+      </fieldset>
+      <label className="block font-ui text-sm font-semibold text-[#630000]">Strengths<textarea className={`${field} min-h-[72px]`} value={good} onChange={(e) => setGood(e.target.value)} /></label>
+      <label className="block font-ui text-sm font-semibold text-[#630000]">Where to focus first<textarea className={`${field} min-h-[72px]`} value={focus} onChange={(e) => setFocus(e.target.value)} /></label>
+      <label className="block font-ui text-sm font-semibold text-[#630000]">Private notes (staff only)<textarea className={`${field} min-h-[72px]`} value={priv} onChange={(e) => setPriv(e.target.value)} /></label>
+      <label className="flex min-h-[44px] items-center gap-3 font-body text-sm"><input type="checkbox" className="h-5 w-5" checked={share} onChange={(e) => setShare(e.target.checked)} />Share these findings with the student</label>
+      <button className={btn} disabled={busy || !Object.keys(ratings).length} onClick={() => run("dp_voice_record_demo", { student: studentId, rate: ratings, good, focus, private_notes: priv, share }, "Vocal Demo recorded as the baseline.")}>Save Vocal Demo</button>{status}
+    </div>
+  );
+}
+
+/** Invite someone who has an account and has had a consultation to complete the intake. No payment, no enrollment, no access to anything else. */
+export function InvitePerson() {
+  const { run, busy, status } = useAct(); const [email, setEmail] = useState("");
+  return (
+    <div className="space-y-2">
+      <label className="block font-ui text-sm font-semibold text-[#630000]">Person&apos;s account email<input type="email" className={field} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+      <button className={btn} disabled={busy || !email.trim()} onClick={() => run("dp_voice_invite_intake", { person_email: email, invite_note: null }, "Invited. They can open /voice/intake now. This does not enroll them or unlock anything else.")}>Invite to complete intake</button>{status}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { createDb, asUser } from "./harness";
+import { createDb, asUser, grantPaid } from "./harness";
 
 const id = (n: number) => `f4f40000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = id(1), B = id(2), STRANGER = id(3), FAC = id(6);
@@ -24,6 +24,7 @@ beforeAll(async () => {
    insert into dp_enrollments(user_id,scope_type,scope_id,status)
      select u,'program',(select id from dp_programs where slug='vocal-coaching'),'active' from unnest(array['${A}','${B}']::uuid[]) u;
   `);
+  await grantPaid(db, A);
   await q(A, `select dp_voice_set_my_tracks(array['spontaneous_expression'], false)`);
   await q(FAC, `select dp_voice_approve_tracks('${A}', array['spontaneous_expression'])`);
   plan = (await savePlan(A, [unit(1, "posture-breath"), unit(2, "pitch-ear", { exercise_keys: ["match-one-note"] }), unit(3, "track-spontaneous-expression", { exercise_keys: ["ad-lib-gaps"] })])).rows[0].id;

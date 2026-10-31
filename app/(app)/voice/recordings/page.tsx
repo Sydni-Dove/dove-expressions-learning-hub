@@ -7,6 +7,8 @@ import { getCurrentUserAndRoles } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { recordingLimits } from "@/lib/r2";
 import { loadRecordings } from "@/lib/recording-queries";
+import PaymentNotice from "@/components/voice/PaymentNotice";
+import { getMyAccess } from "@/lib/voice-access";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ export default async function MyPracticeRecordings() {
   if (!user) redirect("/login");
   if (!(await getStudentPrograms(user.id)).includes("voice")) redirect("/dashboard");
   const supabase = createClient();
-  const l = recordingLimits();
+  const l = recordingLimits(); const access = await getMyAccess(supabase);
   const [{ data: asg }, recordings] = await Promise.all([
     supabase.from("dp_assignments").select("id,title,lesson_id").order("due_at", { ascending: true, nullsFirst: false }),
     loadRecordings(supabase, { studentId: user.id })
@@ -27,7 +29,8 @@ export default async function MyPracticeRecordings() {
         <h1 className="font-display text-4xl text-[#630000]">My Practice Recordings</h1>
         <p className="mt-2 max-w-2xl font-body text-[#4a3a3a]">Only you and your Voice instructor can hear these. Save a recording privately first, then submit it when you want feedback. Submitted recordings and feedback are never overwritten.</p>
       </header>
-      <RecordingLibrary recordings={recordings as RecordingRow[]} assignments={(asg ?? []).map((a) => ({ id: a.id, title: a.title, lessonId: a.lesson_id }))}
+      {!access.paid && <PaymentNotice status={access.status} what="Recording" />}
+      <RecordingLibrary readOnly={!access.paid} recordings={recordings as RecordingRow[]} assignments={(asg ?? []).map((a) => ({ id: a.id, title: a.title, lessonId: a.lesson_id }))}
         limits={{ recommendedMinMinutes: l.recommendedMinMinutes, recommendedMinutes: l.recommendedMinutes, warnMinutes: l.warnMinutes, maxMinutes: l.maxMinutes, maxMb: Math.round(l.maxBytes / 1048576) }} />
     </div>
   );

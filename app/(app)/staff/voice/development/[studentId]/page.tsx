@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AssignAssessment, PlanBuilder, ProgressCheckForm, RatingsComparison, ReviewAssessment, TrackApproval, type PlanVersion, type UnitRow } from "@/components/voice/DevelopmentAdmin";
+import { AccessBadge, AssignAssessment, DemoForm, PlanBuilder, ProgressCheckForm, RatingsComparison, ReviewAssessment, TrackApproval, type Access, type DemoEntry, type PlanVersion, type UnitRow } from "@/components/voice/DevelopmentAdmin";
 import { requireRoles } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { ASSESSMENTS, INTAKE_QUESTIONS, compareRatings, questionsOf, summarizeCreative, summarizePersonalTime, type AssessmentKind, type IntakeAnswers, type PackageType } from "@/lib/voice-assessments";
@@ -11,16 +11,22 @@ export default async function StudentDevelopment({ params }: { params: { student
   await requireRoles(["faculty", "teacher", "super_admin"]);
   if (!/^[0-9a-f-]{36}$/i.test(params.studentId)) notFound();
   const sid = params.studentId; const supabase = createClient();
-  const { data: roster } = await supabase.rpc("dp_program_students", { target_program_slug: "vocal-coaching" });
-  const student = ((roster ?? []) as { id: string; full_name: string | null; email: string | null }[]).find((s) => s.id === sid);
+  const { data: roster } = await supabase.rpc("dp_voice_people");
+  const student = ((roster ?? []) as { id: string; full_name: string | null; email: string | null; enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string }[]).find((s) => s.id === sid);
   if (!student) notFound();
-  const [{ data: profile }, { data: intakes }, { data: assessments }, { data: plans }, { data: checks }] = await Promise.all([
+  const access: Access = { enrolled: student.enrolled, prospect: student.prospect, paid: student.paid, paid_status: student.paid_status };
+  const [{ data: profile }, { data: intakes }, { data: assessments }, { data: plans }, { data: checks }, { data: demoRows }] = await Promise.all([
     supabase.from("dp_voice_profiles").select("selected_tracks,approved_tracks,tongues_requested").eq("student_id", sid).maybeSingle(),
     supabase.from("dp_voice_intakes").select("id,source,answers,submitted_at").eq("student_id", sid).order("submitted_at", { ascending: false }).limit(1),
     supabase.from("dp_voice_assessments").select("id,kind,status,answers,shared_summary,submitted_at").eq("student_id", sid).order("assigned_at", { ascending: false }),
     supabase.from("dp_voice_plans").select("id,title,status,package_type,version_no,source_sample_id,sample_reviewed_at").eq("student_id", sid).order("created_at", { ascending: false }),
-    supabase.from("dp_voice_progress_checks").select("id,week,kind,ratings,strengths,next_focus,shared_at,created_at").eq("student_id", sid).order("created_at", { ascending: false })
+    supabase.from("dp_voice_progress_checks").select("id,week,kind,ratings,strengths,next_focus,shared_at,created_at").eq("student_id", sid).order("created_at", { ascending: false }),
+    supabase.from("dp_voice_demos").select("id,observed_at,ratings,strengths,next_focus,shared_at").eq("student_id", sid).order("observed_at", { ascending: false }).order("created_at", { ascending: false })
   ]);
+  const demoIds = (demoRows ?? []).map((d) => d.id);
+  const { data: demoPriv } = demoIds.length ? await supabase.from("dp_voice_demo_private").select("demo_id,notes").in("demo_id", demoIds) : { data: [] };
+  const demos: DemoEntry[] = (demoRows ?? []).map((d: any) => ({ ...d, notes: (demoPriv ?? []).find((p: any) => p.demo_id === d.id)?.notes ?? null }));
+  const baseline = demos[0] ?? null;
   const ids = (assessments ?? []).map((a) => a.id);
   const { data: priv } = ids.length ? await supabase.from("dp_voice_assessment_private").select("assessment_id,observations,notes").in("assessment_id", ids) : { data: [] };
   const selected = (profile?.selected_tracks ?? []) as TrackKey[]; const approved = (profile?.approved_tracks ?? []) as TrackKey[];
@@ -38,7 +44,11 @@ export default async function StudentDevelopment({ params }: { params: { student
     <div className="space-y-10 pb-20">
       <header><Link href="/staff/voice/development" className="link-action font-ui text-sm">← Student development</Link>
         <h1 className="mt-2 font-display text-3xl text-burgundy">{student.full_name || student.email}</h1>
+        <p className="mt-1"><AccessBadge a={access} /></p>
         <p className="font-body text-sm text-charcoal/70">Private to you and this student. Nothing here is scored or used to label spiritual maturity.</p></header>
+
+      <section aria-labelledby="demo-h"><h2 id="demo-h" className="mb-2 font-display text-xl text-burgundy">Vocal Demo (consultation baseline)</h2>
+        <DemoForm studentId={sid} history={demos} /></section>
 
       <section aria-labelledby="intake-h"><h2 id="intake-h" className="mb-2 font-display text-xl text-burgundy">Intake (goals and choices)</h2>
         {intake ? <dl className="card space-y-2 p-4 font-body text-sm">{INTAKE_QUESTIONS.map((q) => { const v = (intake as Record<string, unknown>)[q.id]; return v ? <div key={q.id}><dt className="font-semibold">{q.text}</dt><dd>{Array.isArray(v) ? v.join(", ") : String(v)}</dd></div> : null; })}<p className="text-xs text-charcoal/60">Source: {intakes?.[0]?.source === "google_forms_import" ? "Google Forms import" : "completed in the Hub"}</p></dl>
@@ -48,7 +58,7 @@ export default async function StudentDevelopment({ params }: { params: { student
         <TrackApproval studentId={sid} selected={selected} approved={approved} tongues={!!profile?.tongues_requested} /></section>
 
       <section aria-labelledby="as-h"><h2 id="as-h" className="mb-2 font-display text-xl text-burgundy">Assessments</h2>
-        <AssignAssessment studentId={sid} selected={selected} />
+        <AssignAssessment studentId={sid} selected={selected} approved={approved} access={access} />
         <ul className="mt-4 space-y-4">{(assessments ?? []).map((a) => {
           const def = ASSESSMENTS[a.kind as AssessmentKind]; const p = (priv ?? []).find((x) => x.assessment_id === a.id);
           const answers = (a.answers ?? {}) as Record<string, string | string[]>;
@@ -62,12 +72,12 @@ export default async function StudentDevelopment({ params }: { params: { student
 
       <section aria-labelledby="plan-h"><h2 id="plan-h" className="mb-2 font-display text-xl text-burgundy">Personalized plan {plan ? `(${plan.status})` : ""}</h2>
         <PlanBuilder studentId={sid} studentName={student.full_name || student.email || "student"} existing={plan ? { id: plan.id, title: plan.title, status: plan.status, package_type: plan.package_type as PackageType, units, rationale: (planPriv?.rationale ?? {}) as never, version_no: plan.version_no, source_sample_id: plan.source_sample_id, sample_reviewed_at: plan.sample_reviewed_at } : null} versions={versions}
-          input={{ intake, selectedTracks: selected, approvedTracks: approved, creativeSuggestions: creativeSummary?.suggestedAreas, tonguesRequested: !!profile?.tongues_requested } as never} /></section>
+          input={{ intake, demo: baseline?.ratings, selectedTracks: selected, approvedTracks: approved, creativeSuggestions: creativeSummary?.suggestedAreas, tonguesRequested: !!profile?.tongues_requested } as never} /></section>
 
       {plan?.status === "active" && <section aria-labelledby="pc-h"><h2 id="pc-h" className="mb-2 font-display text-xl text-burgundy">Progress checks</h2>
         <ProgressCheckForm planId={plan.id} weeks={units.filter((u) => u.checkpoint).map((u) => u.week)} areas={[...new Map(units.map((u) => [u.areaKey, { key: u.areaKey, title: u.areaTitle }])).values()]} />
-        <h3 className="mt-6 font-display text-lg text-burgundy">Baseline, midpoint and final</h3>
-        <RatingsComparison rows={compareRatings((checks ?? []) as never, units.map((u) => u.areaKey))} />
+        <h3 className="mt-6 font-display text-lg text-burgundy">Baseline (Vocal Demo), progress, midpoint and final</h3>
+        <RatingsComparison rows={compareRatings((checks ?? []) as never, units.map((u) => u.areaKey), baseline ? { ratings: baseline.ratings } : null)} />
         <ul className="mt-4 space-y-2">{(checks ?? []).map((c) => <li key={c.id} className="card p-3 font-body text-sm">Week {c.week} · {c.kind} · {c.shared_at ? "shared" : "private"} — {c.strengths}</li>)}</ul></section>}
     </div>
   );

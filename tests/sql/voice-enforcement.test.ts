@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { createDb, asUser } from "./harness";
+import { createDb, asUser, grantPaid } from "./harness";
 
 /** Database-level enforcement audit for the whole Voice release (all migrations applied): isolation, private assessments, optional tracks,
  *  refund independence and a structural check of every table and function the release adds. */
@@ -27,11 +27,12 @@ beforeAll(async () => {
    insert into dp_enrollments(user_id,scope_type,scope_id,status) values ('${EX}','program',(select id from dp_programs where slug='vocal-coaching'),'cancelled');
    insert into dp_enrollments(user_id,scope_type,scope_id,status) select '${CR}','program',id,'active' from dp_programs where slug<>'vocal-coaching' limit 1;
   `);
+  await grantPaid(db, S); await grantPaid(db, O);
   // S has a full record: tracks, intake, assessments (with private review), plan (approved), progress check, recording + feedback.
   await q(S, `select dp_voice_set_my_tracks(array['spontaneous_expression'], false)`);
   await q(FAC, `select dp_voice_approve_tracks('${S}', array['spontaneous_expression'])`);
   await q(S, `select dp_voice_submit_intake('{"goals":"private goal"}'::jsonb, array['spontaneous_expression'])`);
-  const asg = (await q(FAC, `select dp_assessment_assign('${S}','creative_expression') id`)).rows[0].id;
+  const asg = (await q(FAC, `select dp_assessment_assign('${S}','creative_expression','fits their goals') id`)).rows[0].id;
   await q(S, `select dp_assessment_save('${asg}','{"s_adlib":"Not yet"}'::jsonb)`); await q(S, `select dp_assessment_submit('${asg}')`);
   await q(FAC, `select dp_assessment_review('${asg}','{"o_call":"Emerging"}'::jsonb,'staff-only note','Shared summary')`);
   const plan = (await q(FAC, `select dp_plan_save(null,'${S}','P','monthly','[{"seq":1,"week":1,"area_key":"posture-breath","area_title":"Posture","level":"beginner","objective":"o","exercise_keys":["stance-check"]}]'::jsonb,'{}','{}','{"1":["private reason"]}'::jsonb,'staff-only plan note') id`)).rows[0].id;
@@ -92,7 +93,7 @@ describe("isolation: only the student and authorised Voice staff", () => {
       `dp_assessment_save('${id(900)}','{}'::jsonb)`, `dp_assessment_submit('${id(900)}')`, `dp_recording_submit(array['${id(900)}']::uuid[])`
     ];
     for (const who of [X, CR, EX]) for (const c of calls) await denied(who, `select ${c}`);
-    const staffOnly = [`dp_voice_approve_tracks('${S}',array[]::text[])`, `dp_assessment_assign('${S}','creative_expression')`, `dp_assessment_review('${id(900)}','{}'::jsonb,'x',null)`,
+    const staffOnly = [`dp_voice_approve_tracks('${S}',array[]::text[])`, `dp_assessment_assign('${S}','creative_expression','fits their goals')`, `dp_assessment_review('${id(900)}','{}'::jsonb,'x',null)`,
       `dp_plan_save(null,'${S}','p','monthly','[]'::jsonb,'{}','{}','{}','x')`, `dp_plan_activate('${id(900)}')`, `dp_plan_revise('${id(900)}','[]'::jsonb,'r')`, `dp_plan_assign_unit('${id(900)}',current_date)`,
       `dp_plan_copy_sample('${id(900)}','${S}')`, `dp_progress_check_save('${id(900)}',1,'baseline','{}'::jsonb,'','','',false)`, `dp_recording_review('${id(900)}','reviewed','x')`,
       `dp_recording_assign_followup('${id(900)}','${id(901)}',current_date)`, `dp_voice_save_mapping('x','{}'::jsonb)`, `* from dp_voice_import_intake('${S}','{}'::jsonb,'{}',now(),'0123456789abcdef0')`];

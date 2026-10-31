@@ -57,8 +57,8 @@ describe("migration rollback scripts", () => {
   it("rolling back only the newest migrations leaves the earlier ones working (partial rollback)", async () => {
     const { db, files, apply } = await createBareDb();
     for (const f of files) await apply(f);
-    for (const m of [...VOICE_MIGRATIONS].reverse().slice(0, 3)) await db.exec(fs.readFileSync(rollbackFile(m), "utf8"));
-    // 20261030090000 recordings and earlier remain
+    for (const m of [...VOICE_MIGRATIONS].reverse().slice(0, 4)) await db.exec(fs.readFileSync(rollbackFile(m), "utf8"));
+    // 20261030090000 recordings and earlier remain (rolled back: access rules, plan revisions, seed, intake/assessments/plans)
     expect((await db.query<any>(`select count(*)::int c from information_schema.tables where table_name='dp_practice_recordings'`)).rows[0].c).toBe(1);
     expect((await db.query<any>(`select count(*)::int c from information_schema.tables where table_name='dp_voice_plans'`)).rows[0].c).toBe(0);
     expect((await db.query<any>(`select count(*)::int c from pg_proc where proname='dp_plan_revise'`)).rows[0].c).toBe(0);

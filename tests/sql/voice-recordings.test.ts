@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { createDb, asUser } from "./harness";
+import { createDb, asUser, grantPaid } from "./harness";
 
 const id = (n: number) => `f2f20000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = id(1), B = id(2), STRANGER = id(3), T = id(4), FAC = id(6);
@@ -29,6 +29,7 @@ beforeAll(async () => {
    insert into dp_lessons(id,module_id,title,status) values ('${LESSON}','${MODULE}','L','published');
    insert into dp_class_teachers(course_id,user_id) values ('${COURSE}','${T}');
   `);
+  await grantPaid(db, A); await grantPaid(db, B);
   await q(T, `insert into dp_assignments(id,course_id,lesson_id,assigned_to_user_id,title) values
     ('${ASSIGN_A}','${COURSE}','${LESSON}','${A}','A practice'),('${ASSIGN_B}','${COURSE}','${LESSON}','${B}','B practice')`);
 }, 120000);

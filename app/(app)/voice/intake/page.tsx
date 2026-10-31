@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import IntakeForm from "@/components/voice/IntakeForm";
-import { getStudentPrograms } from "@/lib/student-programs";
+import { createClient } from "@/lib/supabase/server";
+import { getMyAccess } from "@/lib/voice-access";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 export default async function IntakePage() {
   const { user } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
-  if (!(await getStudentPrograms(user.id)).includes("voice")) redirect("/dashboard");
+  // Intake needs no payment: enrolled students and people the instructor invited after a consultation.
+  if (!(await getMyAccess(createClient())).intake) redirect("/dashboard");
   return (
     <div className="space-y-6 pb-20">
       <Link href="/voice" className="inline-flex min-h-[44px] items-center font-ui text-sm font-semibold text-[#630000] underline">← Voice Home</Link>

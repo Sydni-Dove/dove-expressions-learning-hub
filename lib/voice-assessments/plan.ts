@@ -14,6 +14,8 @@ export interface PlanInput {
   approvedTracks?: TrackKey[];
   /** Instructor's observed level per area key (from the initial evaluation). Missing = not yet observed. */
   observed?: Record<string, Level | "secure">;
+  /** Vocal Demo ratings (1-5 per skill area) recorded at the consultation: the technical baseline. Instructor observations, if given, override it. */
+  demo?: Record<string, number>;
   /** Areas suggested by the Creative Vocal Expression summary. */
   creativeSuggestions?: string[];
   instructorNotes?: string;
@@ -54,7 +56,10 @@ function pickExercises(area: AreaSpec, level: Level, n = 3) {
 }
 
 /** Draft only. The instructor edits everything. Deterministic: the same inputs give the same draft, and different findings give different plans. */
-export function draftPlan(input: PlanInput): DraftPlan {
+export const levelFromRating = (n: number): Level => (n <= 2 ? "beginner" : n === 3 ? "intermediate" : "advanced");
+export function draftPlan(raw: PlanInput): DraftPlan {
+  const fromDemo = Object.fromEntries(Object.entries(raw.demo ?? {}).filter(([, v]) => Number.isInteger(v) && v >= 1 && v <= 5).map(([k, v]) => [k, levelFromRating(v)]));
+  const input: PlanInput = { ...raw, observed: { ...fromDemo, ...(raw.observed ?? {}) } };
   const tracks = effectiveTracks(input.selectedTracks, input.approvedTracks);
   const held = (input.selectedTracks ?? []).filter((t) => !tracks.includes(t)).map((t) => ({ track: t, reason: "Student chose it, but the instructor has not approved it yet" }));
   for (const t of input.approvedTracks ?? []) if (!(input.selectedTracks ?? []).includes(t)) held.push({ track: t, reason: "Approved, but the student has not chosen it" });
@@ -84,7 +89,7 @@ export function draftPlan(input: PlanInput): DraftPlan {
       checkpoint, followUp: checkpoint ? pick.a.followUp.tasks.slice(0, 2) : []
     });
   }
-  const basis = [input.intake?.goals ? "Intake goals" : "", input.consultationNotes ? "Consultation notes" : "", input.observed && Object.keys(input.observed).length ? "Instructor observations" : "", input.creativeSuggestions?.length ? "Creative Vocal Expression" : "", tracks.length ? "Approved optional tracks" : ""].filter(Boolean);
+  const basis = [input.intake?.goals ? "Intake goals" : "", input.consultationNotes ? "Consultation notes" : "", raw.demo && Object.keys(raw.demo).length ? "Vocal Demo (baseline)" : "", raw.observed && Object.keys(raw.observed).length ? "Instructor observations" : "", input.creativeSuggestions?.length ? "Creative Vocal Expression" : "", tracks.length ? "Approved optional tracks" : ""].filter(Boolean);
   const notes = [
     input.packageType === "twelve_week" ? "Progress checks at weeks 4 and 8 (mid-program), final evaluation in week 12. Revisit and adjust after each." : "",
     input.packageType === "monthly" ? "Follow-up check in lesson 4." : "",

@@ -72,3 +72,11 @@ export async function asUser<T = any>(db: PGlite, uid: string | null, sql: strin
   }
 }
 
+
+/** Fixture helper: give a student a verified-paid WooCommerce coaching package (what a verified, attributed payment produces). Direct insert as the database owner. */
+export async function grantPaid(db: PGlite, studentId: string, o: { assessments?: number; status?: string; installmentsPaid?: number; installmentsTotal?: number; expiresInDays?: number | null; source?: string; order?: string } = {}) {
+  const order = o.order ?? `fx-${studentId.slice(-6)}-${Math.random().toString(36).slice(2, 8)}`;
+  const exp = o.expiresInDays === null ? "null" : `now() + interval '${o.expiresInDays ?? 90} days'`;
+  await db.exec(`insert into dp_coaching_packages(student_id,program_id,lesson_minutes,credits_total,payment_status,installments_total,installments_paid,source,assessments_included,expires_at,external_order_id,external_line_item_id)
+    values ('${studentId}',(select id from dp_programs where slug='vocal-coaching'),60,4,'${o.status ?? "paid"}',${o.installmentsTotal ?? 1},${o.installmentsPaid ?? 1},'${o.source ?? "woocommerce"}',${o.assessments ?? 5},${exp},'${order}','1')`);
+}

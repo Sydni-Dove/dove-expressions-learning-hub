@@ -11,7 +11,7 @@ import { diff, snapshot, type Snapshot } from "../tests/sql/snapshot";
 export const VOICE_MIGRATIONS = [
   "20261029090000_dp_voice_recordings_scheduling_consultations.sql", "20261029100000_dp_voice_draft_lesson_content.sql", "20261029110000_dp_voice_student_resources.sql",
   "20261030090000_dp_voice_practice_recordings.sql", "20261030100000_dp_voice_intake_assessments_plans.sql", "20261030110000_dp_voice_curriculum_seed.sql",
-  "20261031090000_dp_voice_plan_revisions_ratings_imports.sql"
+  "20261031090000_dp_voice_plan_revisions_ratings_imports.sql", "20261101090000_dp_voice_onboarding_payment_access.sql"
 ];
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const tbl = (k: string) => k.replace(/^public\./, "");

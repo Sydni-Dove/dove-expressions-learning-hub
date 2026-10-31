@@ -87,3 +87,18 @@ describe("progress rating comparison", () => {
     expect(rows[1].baseline).toBe(3); // 9 is not a valid rating; the earlier 3 stands
   });
 });
+
+describe("the Vocal Demo is the baseline (never collected twice)", () => {
+  it("uses the demo as baseline when no separate baseline check exists, and says so", () => {
+    const rows = compareRatings([{ kind: "midpoint", week: 6, ratings: { range: 4 } }], ["range", "pitch-ear"], { ratings: { range: 2, "pitch-ear": 3 } });
+    expect(rows[0]).toMatchObject({ areaKey: "range", baseline: 2, baselineSource: "demo", midpoint: 4, change: 2 });
+    expect(rows[1]).toMatchObject({ baseline: 3, baselineSource: "demo", change: 0 });
+  });
+  it("an explicit baseline check, if one is entered, takes precedence", () => {
+    const rows = compareRatings([{ kind: "baseline", week: 1, ratings: { range: 3 } }], ["range"], { ratings: { range: 2 } });
+    expect(rows[0]).toMatchObject({ baseline: 3, baselineSource: "check" });
+  });
+  it("shows no baseline when there is no demo and no check", () => {
+    expect(compareRatings([], ["range"], null)[0]).toMatchObject({ baseline: null, baselineSource: null });
+  });
+});
