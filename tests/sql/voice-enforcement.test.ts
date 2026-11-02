@@ -33,6 +33,7 @@ beforeAll(async () => {
   await q(FAC, `select dp_voice_approve_tracks('${S}', array['spontaneous_expression'])`);
   await q(S, `select dp_voice_submit_intake('{"goals":"private goal"}'::jsonb, array['spontaneous_expression'])`);
   const asg = (await q(FAC, `select dp_assessment_assign('${S}','creative_expression','fits their goals') id`)).rows[0].id;
+  await q(S, `select dp_assessment_consent('${asg}', true)`);
   await q(S, `select dp_assessment_save('${asg}','{"s_adlib":"Not yet"}'::jsonb)`); await q(S, `select dp_assessment_submit('${asg}')`);
   await q(FAC, `select dp_assessment_review('${asg}','{"o_call":"Emerging"}'::jsonb,'staff-only note','Shared summary')`);
   const plan = (await q(FAC, `select dp_plan_save(null,'${S}','P','monthly','[{"seq":1,"week":1,"area_key":"posture-breath","area_title":"Posture","level":"beginner","objective":"o","exercise_keys":["stance-check"]}]'::jsonb,'{}','{}','{"1":["private reason"]}'::jsonb,'staff-only plan note') id`)).rows[0].id;

@@ -33,10 +33,15 @@ export function buildRollback(version: string, before: Snapshot, after: Snapshot
   for (const k of d.policiesAdded) { const [schema, table, ...p] = k.split("."); if (persists(table) || schema === "storage") L.push(`drop policy if exists "${p.join(".")}" on ${schema}.${table};`); }
   for (const k of d.triggersAdded) { const [table, name] = k.split("."); if (persists(table)) L.push(`drop trigger if exists ${name} on ${table};`); }
   for (const k of d.policiesChanged.concat(d.policiesRemoved)) { const [schema, table, ...p] = k.split("."); L.push(`drop policy if exists "${p.join(".")}" on ${schema}.${table};`, before.policyDefs[k]); }
-  for (const k of d.triggersRemoved.concat(d.triggersChanged, d.indexesRemoved, d.indexesChanged, d.columnsRemoved, d.columnsChanged, d.rlsChanged, d.tablesRemoved, d.bucketsRemoved, d.bucketsChanged, d.typesRemoved)) manual.push(k);
+  for (const k of d.triggersRemoved.concat(d.triggersChanged, d.indexesRemoved, d.indexesChanged, d.columnsRemoved, d.rlsChanged, d.tablesRemoved, d.bucketsRemoved, d.bucketsChanged, d.typesRemoved)) manual.push(k);
   for (const k of d.constraintsChanged) { const i = k.lastIndexOf("."); const t = k.slice(0, i), c = k.slice(i + 1); L.push(`alter table ${t} drop constraint ${c};`, `alter table ${t} add constraint ${c} ${before.constraints[k]};`); }
   for (const k of d.constraintsAdded) { const i = k.lastIndexOf("."); const t = k.slice(0, i), c = k.slice(i + 1); if (persists(t)) L.push(`alter table ${t} drop constraint if exists ${c};`); }
-  for (const k of d.constraintsRemoved) { const i = k.lastIndexOf("."); const t = k.slice(0, i); if (persists(t)) manual.push(k); }
+  for (const k of d.columnsChanged) {
+    const i = k.indexOf("."); const t = k.slice(0, i), c = k.slice(i + 1); const [, nullable, def] = before.columns[k].split("|");
+    L.push(def ? `alter table ${t} alter column ${c} set default ${def};` : `alter table ${t} alter column ${c} drop default;`);
+    if (nullable === "NO") L.push(`update ${t} set ${c}=0 where ${c} is null;`, `alter table ${t} alter column ${c} set not null;`);
+  }
+  for (const k of d.constraintsRemoved) { const i = k.lastIndexOf("."); const t = k.slice(0, i); if (persists(t) && !k.endsWith("_not_null")) manual.push(k); }
   for (const s of extra.dataSql ?? []) L.push(s);
   const views = d.tablesAdded.filter((k) => after.tables[k].kind === "v"), realTables = d.tablesAdded.filter((k) => after.tables[k].kind !== "v");
   for (const v of views.reverse()) L.push(`drop view if exists ${tbl(v)};`);

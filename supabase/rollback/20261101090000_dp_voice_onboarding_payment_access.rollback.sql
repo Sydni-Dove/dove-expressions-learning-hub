@@ -13,8 +13,6 @@ drop policy if exists "dp_voice_exercises_read" on public.dp_voice_exercises;
 create policy "dp_voice_exercises_read" on public.dp_voice_exercises as PERMISSIVE for SELECT to authenticated using ((dp_private.manage_voice() OR (is_active AND dp_private.voice_member(auth.uid()))));
 drop policy if exists "dp_voice_content_read" on public.dp_voice_resource_content;
 create policy "dp_voice_content_read" on public.dp_voice_resource_content as PERMISSIVE for SELECT to authenticated using ((dp_private.manage_voice() OR dp_private.voice_member(auth.uid())));
-drop policy if exists "dp_voice_goals_read" on public.dp_voice_goals;
-create policy "dp_voice_goals_read" on public.dp_voice_goals as PERMISSIVE for SELECT to authenticated using ((dp_private.manage_voice() OR ((student_id = auth.uid()) AND dp_private.voice_member(auth.uid()))));
 drop policy if exists "dp_voice_goal_updates_insert" on public.dp_voice_goal_updates;
 create policy "dp_voice_goal_updates_insert" on public.dp_voice_goal_updates as PERMISSIVE for INSERT to authenticated with check (((author_id = auth.uid()) AND (EXISTS ( SELECT 1
    FROM dp_voice_goals g
@@ -23,21 +21,58 @@ drop policy if exists "dp_voice_profiles_read" on public.dp_voice_profiles;
 create policy "dp_voice_profiles_read" on public.dp_voice_profiles as PERMISSIVE for SELECT to authenticated using ((((student_id = auth.uid()) AND dp_private.voice_member(auth.uid())) OR dp_private.manage_voice()));
 drop policy if exists "dp_voice_intakes_read" on public.dp_voice_intakes;
 create policy "dp_voice_intakes_read" on public.dp_voice_intakes as PERMISSIVE for SELECT to authenticated using ((((student_id = auth.uid()) AND dp_private.voice_member(auth.uid())) OR dp_private.manage_voice()));
+alter table dp_voice_assessments drop constraint dp_voice_assessments_status_check;
+alter table dp_voice_assessments add constraint dp_voice_assessments_status_check CHECK ((status = ANY (ARRAY['assigned'::text, 'in_progress'::text, 'submitted'::text, 'reviewed'::text])));
+alter table dp_coaching_packages drop constraint if exists dp_coaching_packages_access_grant_id_fkey;
 alter table dp_voice_assessments drop constraint if exists dp_voice_assessments_assign_reason_check;
-drop table if exists dp_voice_demo_private, dp_voice_demos, dp_voice_prospects cascade;
+alter table dp_coaching_tiers alter column assessments_included set default 0;
+update dp_coaching_tiers set assessments_included=0 where assessments_included is null;
+alter table dp_coaching_tiers alter column assessments_included set not null;
+alter table dp_coaching_packages alter column assessments_included set default 0;
+update dp_coaching_packages set assessments_included=0 where assessments_included is null;
+alter table dp_coaching_packages alter column assessments_included set not null;
+drop table if exists dp_voice_demo_private, dp_voice_demos, dp_voice_prospects, dp_voice_access_events, dp_voice_access_grants cascade;
+alter table dp_coaching_packages drop column if exists access_grant_id cascade;
 alter table dp_voice_assessments drop column if exists assign_reason cascade;
-drop function if exists dp_private.plan_payment_gate();
-drop function if exists public.dp_voice_record_demo(student uuid, rate jsonb, good text, focus text, private_notes text, share boolean, observed timestamp with time zone);
+alter table dp_voice_assessments drop column if exists consented_at cascade;
+alter table dp_voice_assessments drop column if exists declined_at cascade;
+drop function if exists dp_private.audit_immutable();
 drop function if exists dp_private.assessment_gate();
 drop function if exists dp_private.recording_gate();
 drop function if exists dp_private.practice_assignment_gate();
+drop function if exists dp_private.plan_payment_gate();
+drop function if exists dp_private.assessments_allowance(uid uuid);
+drop function if exists public.dp_voice_record_demo(student uuid, rate jsonb, good text, focus text, private_notes text, share boolean, observed timestamp with time zone);
+drop function if exists dp_private.access_via(uid uuid);
+drop function if exists dp_private.can_verify_payments();
 drop function if exists public.dp_voice_invite_intake(person_email text, invite_note text);
 drop function if exists public.dp_voice_people();
 drop function if exists public.dp_voice_my_access();
 drop function if exists public.dp_assessment_assign(student uuid, assessment_kind text, reason text);
+drop function if exists public.dp_assessment_consent(aid uuid, accept boolean);
+drop function if exists public.dp_voice_record_access_grant(student uuid, tier uuid, grant_kind text, grant_method text, grant_reference text, grant_reason text, paid_on date, amount integer, assessments integer, expiry timestamp with time zone);
+drop function if exists public.dp_voice_revoke_access_grant(grant_id uuid, why text);
+drop function if exists public.dp_voice_enroll_student(student uuid, enroll_note text);
 drop function if exists dp_private.intake_ok(uid uuid);
 drop function if exists dp_private.voice_paid(uid uuid);
-drop function if exists dp_private.assessments_allowance(uid uuid);
+drop function if exists dp_private.paid_packages(uid uuid);
+CREATE OR REPLACE FUNCTION dp_private.lesson_level_ok(lid uuid, mid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+ select auth.uid() is not null and (
+  not exists(select 1 from dp_lesson_access a where a.lesson_id=lid)
+  or exists(select 1 from dp_lesson_access a where a.lesson_id=lid
+      and exists(select 1 from dp_coaching_packages p where p.student_id=auth.uid() and p.resource_level>=a.min_level
+        and p.payment_status in ('paid','partial','complimentary') and (p.expires_at is null or p.expires_at>now())
+        and dp_private.unlocked_credits(p.credits_total,p.installments_total,p.installments_paid,p.payment_status)>=greatest(a.min_unlocked_lessons,1)))
+  or exists(select 1 from dp_modules m where m.id=mid and dp_private.manage_course(m.course_id)))
+$function$;
+revoke all on function dp_private.lesson_level_ok(lid uuid, mid uuid) from public, anon, authenticated, service_role;
+grant execute on function dp_private.lesson_level_ok(lid uuid, mid uuid) to postgres;
+grant execute on function dp_private.lesson_level_ok(lid uuid, mid uuid) to authenticated;
 CREATE OR REPLACE FUNCTION public.dp_voice_set_my_tracks(tracks text[], tongues boolean DEFAULT false)
  RETURNS void
  LANGUAGE plpgsql

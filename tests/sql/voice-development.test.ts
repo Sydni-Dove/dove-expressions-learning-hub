@@ -84,6 +84,7 @@ describe("assessments", () => {
     expect(await denied(A, `select dp_assessment_assign('${A}','creative_expression','fits their goals')`)).toMatch(/Not authorized/);
     personal = (await q(FAC, `select dp_assessment_assign('${A}','personal_time','fits their goals') id`)).rows[0].id;
     creative = (await q(FAC, `select dp_assessment_assign('${A}','creative_expression','fits their goals') id`)).rows[0].id;
+    await q(A, `select dp_assessment_consent('${personal}', true)`); await q(A, `select dp_assessment_consent('${creative}', true)`);
     expect(await denied(FAC, `select dp_assessment_assign('${A}','personal_time','fits their goals')`)).toMatch(/unique|duplicate/i);
   });
   it("saves drafts, resumes, submits, and is then locked", async () => {
