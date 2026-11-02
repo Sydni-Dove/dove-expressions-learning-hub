@@ -1,3 +1,4 @@
+/** FROZEN ONE-TIME IMPORT SOURCE. These manuscripts are converted by convert.ts into the seed migration. After the seed is applied the DATABASE is the only source of truth; the app never reads this file. Edit teachings in the Teaching Editor, not here. */
 import type { TeachingModule } from "./types";
 
 export const CORE_STATEMENT = "The youngest in the Kingdom may face some of the hardest challenges in praise and worship ministry because they’re still developing the spiritual maturity and discernment needed to withstand the pressures they encounter.";

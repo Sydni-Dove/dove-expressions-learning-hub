@@ -1,3 +1,4 @@
+/** FROZEN ONE-TIME IMPORT SOURCE. These manuscripts are converted by convert.ts into the seed migration. After the seed is applied the DATABASE is the only source of truth; the app never reads this file. Edit teachings in the Teaching Editor, not here. */
 import type { TeachingModule } from "./types";
 
 export const MODULE_1: TeachingModule = {

@@ -90,8 +90,8 @@ export async function planAll() {
         `delete from dp_voice_exercises where curriculum_key is not null;`,
         `delete from dp_voice_skills s where s.slug in (${added.map(q).join(", ")}) and not exists (select 1 from dp_voice_exercises e where e.skill_id=s.id);`);
     }
-    if (file.startsWith("20261102100000")) extra.dataSql!.push(`-- Removes the seeded Worship Development library. Modules already ASSIGNED to a student are kept (the assignment references the module), so those rows stay.`,
-      `delete from dp_voice_teaching_modules m where not exists (select 1 from dp_assignments a where a.teaching_module_id=m.id);`);
+    if (file.startsWith("20261102100000")) extra.dataSql!.push(`-- Removes the imported manuscripts only if nobody has assigned them or published them; anything edited, published or assigned is kept.`,
+      `delete from dp_voice_teachings t where t.template='imported' and t.draft_rev=1 and t.published_version_id is null and not exists (select 1 from dp_assignments a where a.teaching_id=t.id);`);
     if (file.startsWith("20261029090000")) extra.warnings!.push("Dropping the recording/testimonial tables deletes their rows. Export them first; storage objects must be removed through the Storage API.");
     if (file.startsWith("20261029110000")) extra.warnings!.push("This migration also ran 'revoke all on all functions in schema dp_private from public, anon' and granted execute on them to authenticated. That blanket change cannot be reversed from a diff; restore from the ACL snapshot taken before applying (see docs/voice-release-plan.md).");
     if (file.startsWith("20261030090000")) extra.warnings!.push("Dropping dp_practice_recordings loses the link to student recordings stored in R2. Export the object keys and remove the R2 objects separately.");

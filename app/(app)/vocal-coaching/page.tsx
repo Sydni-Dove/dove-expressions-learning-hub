@@ -37,7 +37,7 @@ export default async function VocalCoachingPage() {
   let feedback: { id: string; submission_id: string; content: string | null; created_at: string }[] = [];
   let loadError = false;
   // Worship Development shows only once the instructor has assigned at least one teaching (row-level security filters the rows).
-  const hasTeachings = isStudent ? ((await supabase.from("dp_voice_teaching_modules").select("id", { count: "exact", head: true })).count ?? 0) > 0 : false;
+  const hasTeachings = isStudent ? ((await supabase.from("dp_voice_teaching_versions").select("id", { count: "exact", head: true })).count ?? 0) > 0 : false;
   if (isStudent) {
     const [a, s, d, t] = await Promise.all([
       supabase.from("dp_assignments").select("id,title,due_at,song,goal,practice_steps,lesson_id,course_id").order("due_at", { ascending: true, nullsFirst: false }),

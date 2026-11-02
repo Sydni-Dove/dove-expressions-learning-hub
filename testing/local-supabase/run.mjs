@@ -68,6 +68,13 @@ async function seed() {
   for (const t of ["dp_voice_demo_private", "dp_voice_demos", "dp_voice_prospects", "dp_voice_import_mappings", "dp_voice_plan_versions", "dp_voice_progress_check_private", "dp_voice_progress_checks", "dp_voice_plan_private", "dp_voice_plan_units", "dp_voice_plans", "dp_voice_assessment_private", "dp_voice_assessments", "dp_voice_intakes", "dp_voice_profiles", "dp_practice_recording_feedback", "dp_practice_recordings", "dp_submission_attempts", "dp_submissions", "dp_feedback", "dp_assignment_progress", "dp_assignments", "dp_voice_goal_updates", "dp_voice_goals",
     "dp_voice_plan_templates", "dp_voice_testimonials", "dp_sessions", "dp_coaching_plans", "dp_unmatched_payments", "dp_package_payments", "dp_coaching_packages", "dp_coaching_tiers", "dp_lesson_access", "dp_consultation_inquiries"])
     await c.query(`delete from ${t}`);
+  // Worship Development teachings: remove everything tests created (versions and history are immutable, so bypass the guard triggers for this local-only reset) and re-import the three manuscripts exactly as the migration does.
+  await c.query("set session_replication_role = replica");
+  for (const t of ["dp_voice_teaching_category_links", "dp_voice_teaching_revisions", "dp_voice_teaching_drafts"]) await c.query(`delete from ${t}`);
+  await c.query("update dp_voice_teachings set published_version_id = null");
+  for (const t of ["dp_voice_teaching_versions", "dp_voice_teachings"]) await c.query(`delete from ${t}`);
+  await c.query("set session_replication_role = origin");
+  await c.query(fs.readFileSync(path.join(repo, "supabase/migrations/20261102100000_dp_voice_worship_teachings_seed.sql"), "utf8"));
   await c.query("delete from dp_voice_exercises where curriculum_key is null"); // keep the migration-seeded curriculum library
   await c.query("delete from storage.objects where bucket_id in ('voice-recordings','voice-testimonials')");
   for (const t of ["dp_enrollments", "dp_user_roles", "dp_class_teachers"]) await c.query(`delete from ${t} where user_id = any($1::uuid[])`, [all]);

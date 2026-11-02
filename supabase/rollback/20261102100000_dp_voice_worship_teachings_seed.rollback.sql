@@ -3,6 +3,6 @@
 -- Runs in one transaction: if anything fails, nothing changes.
 
 begin;
--- Removes the seeded Worship Development library. Modules already ASSIGNED to a student are kept (the assignment references the module), so those rows stay.
-delete from dp_voice_teaching_modules m where not exists (select 1 from dp_assignments a where a.teaching_module_id=m.id);
+-- Removes the imported manuscripts only if nobody has assigned them or published them; anything edited, published or assigned is kept.
+delete from dp_voice_teachings t where t.template='imported' and t.draft_rev=1 and t.published_version_id is null and not exists (select 1 from dp_assignments a where a.teaching_id=t.id);
 commit;
