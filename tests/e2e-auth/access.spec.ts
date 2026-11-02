@@ -139,7 +139,12 @@ test.describe.serial("onboarding and payment access", () => {
     await u.page.goto("/voice/assessments");
     await expect(u.page.getByRole("note").filter({ hasText: "opens after your payment" })).toHaveCount(0);
     await expect(u.page.getByText("Your coach chose this because: She wants to grow in ad-libbing.")).toBeVisible();
-    await u.page.getByRole("link", { name: "Start" }).click();
+    await expect(u.page.getByText("Waiting for your decision")).toBeVisible();
+    await u.page.getByRole("link", { name: "Review the invitation" }).click();
+    // an assignment is only an invitation: the student accepts before anything can be started
+    await expect(u.page.getByRole("heading", { name: "Your coach is inviting you to take this" })).toBeVisible();
+    await expect(u.page.getByRole("button", { name: "Save draft" })).toHaveCount(0);
+    await u.page.getByRole("button", { name: "Yes, I'd like to take it" }).click();
     await expect(u.page.getByRole("button", { name: "Save draft" })).toBeVisible();
     await u.ctx.close();
   });
@@ -149,6 +154,20 @@ test.describe.serial("onboarding and payment access", () => {
     const ok = await tryRpc("instructor", "dp_assessment_assign", { student: F.ids.unpaid, assessment_kind: "personal_time", reason: "x" });
     expect(ok.status).toBeGreaterThanOrEqual(400); // prophetic needs the student's choice and the instructor's authorization first
     expect(ok.text).toMatch(/choice of Prophetic Worship Development and your authorization/);
+  });
+
+  test("a student can decline an invitation at no cost; the instructor can then suggest something else", async ({ browser }) => {
+    await svc("dp_record_package_purchase", { student: F.ids.multi, tier: tierId, quantity: 1, order_id: "acc-other-1", line_item_id: "1", sku: "wc-access-test", pay_status: "paid", plan_ref: null });
+    const made = await rest("instructor", "rpc/dp_assessment_assign", { method: "POST", body: JSON.stringify({ student: F.ids.multi, assessment_kind: "creative_expression", reason: "Fits her goals" }) });
+    expect(made.status, await made.clone().text()).toBeLessThan(300);
+    const s = await login(browser, "multi");
+    await s.page.goto("/voice/assessments");
+    await s.page.getByRole("link", { name: "Review the invitation" }).click();
+    await s.page.getByRole("button", { name: "No thanks" }).click();
+    await expect(s.page.getByText("You chose not to take this one. Nothing is lost")).toBeVisible();
+    await s.ctx.close();
+    const row = (await (await rest("instructor", `dp_voice_assessments?select=status&student_id=eq.${F.ids.multi}`)).json())[0];
+    expect(row.status).toBe("declined");
   });
 
   test("a refund closes the new work but keeps everything that exists; the student's answers and the instructor's notes are untouched", async ({ browser }) => {
@@ -197,5 +216,99 @@ test.describe.serial("onboarding and payment access", () => {
     await expect(s.page.getByText("Your Vocal Demo: where you started")).toBeVisible();
     await expect(s.page.getByRole("table", { name: /Skill ratings/ }).getByRole("row", { name: /Posture and breath/ })).toContainText("+2");
     await s.ctx.close();
+  });
+});
+
+test.describe.serial("offline payments, complimentary access and enrollment (authorized staff only, audited)", () => {
+  test.beforeAll(() => { execSync("node testing/local-supabase/run.mjs seed", { stdio: "pipe", timeout: 120000 }); });
+
+  test("a scoped teacher can see the student but cannot verify payments, grant access or enroll", async ({ browser }) => {
+    const t = await login(browser, "scopedTeacher");
+    await t.page.goto(`/staff/voice/development/${F.ids.unpaid}`);
+    // a teacher with no Voice responsibility gets no student page at all, and in no case a payment or enrollment control
+    await expect(t.page.getByRole("button", { name: /Verify and record payment|Grant complimentary access|Enroll in Voice/ })).toHaveCount(0);
+    const r = await rest("scopedTeacher" as never, "rpc/dp_voice_record_access_grant", { method: "POST", body: JSON.stringify({ student: F.ids.unpaid, tier: "00000000-0000-4000-8000-000000000001", grant_kind: "offline_payment", grant_method: "cash", grant_reference: "x", grant_reason: "", paid_on: "2026-11-01", amount: null, assessments: null, expiry: null }) });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect((await rest("scopedTeacher" as never, "rpc/dp_voice_enroll_student", { method: "POST", body: JSON.stringify({ student: F.ids.prospect, enroll_note: null }) })).status).toBeGreaterThanOrEqual(400);
+    await t.ctx.close();
+  });
+
+  test("faculty verifies a cash payment: the person becomes eligible but is NOT enrolled until the instructor enrolls them", async ({ browser }) => {
+    const programs = await (await rest("instructor", "dp_programs?select=id&slug=eq.vocal-coaching")).json();
+    const made = await rest("instructor", "dp_coaching_tiers", { method: "POST", body: JSON.stringify({ program_id: programs[0].id, slug: "offline-test", name: "Offline test package", lesson_minutes: 60, lesson_count: 4, installments: 1, woo_product_ids: [] }) });
+    expect(made.status, await made.clone().text()).toBeLessThan(300);
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice/development");
+    await page.getByLabel(/Person's account email/).fill(F.users.prospect.email);
+    await page.getByRole("button", { name: "Invite to complete intake" }).click();
+    await expect(page.getByText(/Invited\./)).toBeVisible();
+    await page.goto(`/staff/voice/development/${F.ids.prospect}`);
+    await expect(page.getByText("No verified payment or complimentary access yet.")).toBeVisible();
+    const verify = page.getByRole("button", { name: "Verify and record payment" });
+    await expect(verify).toBeDisabled(); // a reference is required
+    await page.getByLabel("How was it paid?").selectOption({ label: "Cash" });
+    await page.getByLabel(/Receipt, check or transaction reference/).fill("Receipt #204, cash at the studio");
+    await page.getByLabel(/Amount received/).fill("180");
+    await verify.click();
+    await expect(page.getByText("Offline payment verified and recorded.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(/Access is open through a verified offline payment/)).toBeVisible();
+    await expect(page.getByText(/Eligible, but not enrolled: enrollment is your decision/)).toBeVisible();
+    await expect(page.getByLabel("Access records")).toContainText("Offline payment · Cash");
+    await expect(page.getByLabel("Access records")).toContainText("Reference: Receipt #204, cash at the studio · $180.00");
+    expect(await (await rest("instructor", `dp_enrollments?select=id&user_id=eq.${F.ids.prospect}`)).json()).toEqual([]); // eligibility is not enrollment
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Enroll in Voice" }).click();
+    await expect(page.getByText("Enrolled in Voice.")).toBeVisible();
+    expect(await (await rest("instructor", `dp_enrollments?select=id&user_id=eq.${F.ids.prospect}`)).json()).toHaveLength(1);
+    await page.reload();
+    await page.getByText(/Audit trail \(2\)/).click();
+    await expect(page.getByText(/payment recorded/)).toBeVisible();
+    await expect(page.getByText(/enrolled/).first()).toBeVisible();
+    await ctx.close();
+    // the student now has access to what opens after payment
+    const s = await login(browser, "prospect");
+    await s.page.goto("/voice/assessments");
+    await expect(s.page.getByRole("note").filter({ hasText: "opens after your payment" })).toHaveCount(0);
+    await s.ctx.close();
+  });
+
+  test("complimentary access is recorded as complimentary, with a reason, and can be revoked without deleting anything", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "admin");
+    await page.goto(`/staff/voice/development/${F.ids.unpaid}`);
+    await page.getByLabel("What is this?").selectOption({ label: "Complimentary access (no payment)" });
+    const grant = page.getByRole("button", { name: "Grant complimentary access" });
+    await expect(grant).toBeDisabled(); // a reason is required
+    await expect(page.getByLabel(/Amount received/)).toHaveCount(0); // never presented as a payment
+    await page.getByLabel(/Why is this complimentary/).fill("Worship team scholarship");
+    await grant.click();
+    await expect(page.getByText("Complimentary access recorded.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(/Access is open through complimentary access \(not a payment\)/)).toBeVisible();
+    await expect(page.getByLabel("Access records")).toContainText("Complimentary access (not a payment)");
+    await expect(page.getByLabel("Access records")).toContainText("Reason: Worship team scholarship");
+    page.once("dialog", (d) => d.accept("Scholarship ended"));
+    await page.getByRole("button", { name: "Revoke" }).click();
+    await expect(page.getByText(/Access revoked\. Everything the student has already done stays\./)).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("No verified payment or complimentary access yet.")).toBeVisible();
+    await expect(page.getByLabel("Access records")).toContainText("REVOKED");
+    await ctx.close();
+    // the student can still read their own record
+    expect(await (await rest("unpaid", "dp_voice_intakes?select=id")).json()).toBeDefined();
+  });
+
+  test("a package can leave assessments to the instructor (blank) instead of defaulting to zero", async ({ browser }) => {
+    const { ctx, page } = await login(browser, "instructor");
+    await page.goto("/staff/voice/packages");
+    await page.getByLabel("Name", { exact: true }).fill("Blank entitlement test");
+    const field = page.getByLabel(/Assessments included/);
+    await expect(field).toHaveValue("");
+    await expect(field).toHaveAttribute("placeholder", "Blank = instructor decides");
+    await page.getByRole("button", { name: "Create package" }).click();
+    await expect(page.getByText("Package created.")).toBeVisible();
+    const rows = await (await rest("instructor", "dp_coaching_tiers?select=assessments_included&name=eq.Blank entitlement test")).json();
+    expect(rows).toEqual([{ assessments_included: null }]);
+    await ctx.close();
   });
 });

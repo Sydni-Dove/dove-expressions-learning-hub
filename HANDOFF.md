@@ -216,3 +216,7 @@ confirmed. **Open question:** monthly four-lesson and 12-week prices at 60 minut
 - Confirmed decision: intake and the Vocal Demo BEFORE payment; assessments, recordings, resources, new practice AFTER verified WooCommerce payment. New unapplied migration `20261101090000`; rules and decisions in `docs/voice-access-rules.md`.
 - No separate technical assessment after purchase: the Vocal Demo is the technical baseline and the baseline for progress comparisons. After payment only specialized assessments, each chosen by the instructor with a reason.
 - Open decisions: offline/complimentary payments are not counted as verified; tiers must set `assessments_included` (default 0); enrollment is still manual.
+
+## Update: Nov 2 (owner decisions on access)
+- Offline/cash/Square/complimentary access: authorized-staff-only, audited, distinguishes complimentary from paid. Enrollment stays instructor-controlled (explicit step). Assessment entitlements: blank = instructor decides (new default), number = cap, 0 = none. Assessments need the student's consent. Completed work stays available after refund/expiry/revocation. Details: `docs/voice-access-rules.md`. Still unapplied: migration `20261101090000` (and all earlier Voice migrations).
+- Assessment A: waiting for the Word document ("From Vision to Reality", Day 1, "Discerning God's Voice").

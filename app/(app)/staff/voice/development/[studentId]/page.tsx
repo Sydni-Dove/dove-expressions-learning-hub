@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AccessBadge, AssignAssessment, DemoForm, PlanBuilder, ProgressCheckForm, RatingsComparison, ReviewAssessment, TrackApproval, type Access, type DemoEntry, type PlanVersion, type UnitRow } from "@/components/voice/DevelopmentAdmin";
+import { AccessAdmin, AccessBadge, AssignAssessment, DemoForm, PlanBuilder, ProgressCheckForm, RatingsComparison, ReviewAssessment, TrackApproval, type Access, type AccessEvent, type AccessGrant, type DemoEntry, type PlanVersion, type UnitRow } from "@/components/voice/DevelopmentAdmin";
 import { requireRoles } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { ASSESSMENTS, INTAKE_QUESTIONS, compareRatings, questionsOf, summarizeCreative, summarizePersonalTime, type AssessmentKind, type IntakeAnswers, type PackageType } from "@/lib/voice-assessments";
@@ -8,13 +8,19 @@ import type { TrackKey } from "@/lib/voice-curriculum";
 
 export const dynamic = "force-dynamic";
 export default async function StudentDevelopment({ params }: { params: { studentId: string } }) {
-  await requireRoles(["faculty", "teacher", "super_admin"]);
+  const { roles } = await requireRoles(["faculty", "teacher", "super_admin"]);
+  const canVerify = roles.some((r) => r === "faculty" || r === "super_admin");
   if (!/^[0-9a-f-]{36}$/i.test(params.studentId)) notFound();
   const sid = params.studentId; const supabase = createClient();
   const { data: roster } = await supabase.rpc("dp_voice_people");
-  const student = ((roster ?? []) as { id: string; full_name: string | null; email: string | null; enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string }[]).find((s) => s.id === sid);
+  const student = ((roster ?? []) as { id: string; full_name: string | null; email: string | null; enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string; paid_via: string | null }[]).find((s) => s.id === sid);
   if (!student) notFound();
-  const access: Access = { enrolled: student.enrolled, prospect: student.prospect, paid: student.paid, paid_status: student.paid_status };
+  const access: Access = { enrolled: student.enrolled, prospect: student.prospect, paid: student.paid, paid_status: student.paid_status, paid_via: student.paid_via };
+  const [{ data: grants }, { data: events }, { data: tiers }] = await Promise.all([
+    supabase.from("dp_voice_access_grants").select("id,kind,method,reference,reason,amount_cents,received_on,recorded_at,revoked_at,revoke_reason").eq("student_id", sid).order("recorded_at", { ascending: false }),
+    supabase.from("dp_voice_access_events").select("id,event,at,details").eq("student_id", sid).order("at", { ascending: false }),
+    supabase.from("dp_coaching_tiers").select("id,name,assessments_included").eq("is_active", true).order("sort_order")
+  ]);
   const [{ data: profile }, { data: intakes }, { data: assessments }, { data: plans }, { data: checks }, { data: demoRows }] = await Promise.all([
     supabase.from("dp_voice_profiles").select("selected_tracks,approved_tracks,tongues_requested").eq("student_id", sid).maybeSingle(),
     supabase.from("dp_voice_intakes").select("id,source,answers,submitted_at").eq("student_id", sid).order("submitted_at", { ascending: false }).limit(1),
@@ -46,6 +52,9 @@ export default async function StudentDevelopment({ params }: { params: { student
         <h1 className="mt-2 font-display text-3xl text-burgundy">{student.full_name || student.email}</h1>
         <p className="mt-1"><AccessBadge a={access} /></p>
         <p className="font-body text-sm text-charcoal/70">Private to you and this student. Nothing here is scored or used to label spiritual maturity.</p></header>
+
+      <section aria-labelledby="pay-h"><h2 id="pay-h" className="mb-2 font-display text-xl text-burgundy">Payment and access</h2>
+        <AccessAdmin studentId={sid} access={access} canVerify={canVerify} tiers={(tiers ?? []) as never} grants={(grants ?? []) as AccessGrant[]} events={(events ?? []) as AccessEvent[]} /></section>
 
       <section aria-labelledby="demo-h"><h2 id="demo-h" className="mb-2 font-display text-xl text-burgundy">Vocal Demo (consultation baseline)</h2>
         <DemoForm studentId={sid} history={demos} /></section>

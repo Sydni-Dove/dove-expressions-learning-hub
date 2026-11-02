@@ -51,7 +51,8 @@ test.describe.serial("intake, assessments, plan, progress checks", () => {
     const { ctx, page } = await login(browser, "voiceOnly");
     await page.goto("/voice/assessments");
     await expect(page.getByText("Personal Time With God", { exact: true })).toBeVisible();
-    await page.getByRole("listitem").filter({ hasText: "Personal Time With God" }).getByRole("link", { name: "Start" }).click();
+    await page.getByRole("listitem").filter({ hasText: "Personal Time With God" }).getByRole("link", { name: "Review the invitation" }).click();
+    await page.getByRole("button", { name: "Yes, I'd like to take it" }).click();
     await expect(page.getByText("You may skip any question")).toBeVisible();
     await page.getByRole("radiogroup", { name: /How often do you currently make intentional time/ }).getByText("Daily", { exact: true }).click();
     await page.getByLabel(/What helps you connect with God/).fill("Quiet instrumental music.");
@@ -71,7 +72,8 @@ test.describe.serial("intake, assessments, plan, progress checks", () => {
     expect(upd.status).toBeGreaterThanOrEqual(400);
     // complete the creative assessment too
     await page.goto("/voice/assessments");
-    await page.getByRole("listitem").filter({ hasText: "Creative Vocal Expression" }).getByRole("link", { name: "Start" }).click();
+    await page.getByRole("listitem").filter({ hasText: "Creative Vocal Expression" }).getByRole("link", { name: "Review the invitation" }).click();
+    await page.getByRole("button", { name: "Yes, I'd like to take it" }).click();
     await page.getByRole("radiogroup", { name: /Adding ad-libs over a song/ }).getByText("Not yet", { exact: true }).click();
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page.getByText("Draft saved")).toBeVisible();

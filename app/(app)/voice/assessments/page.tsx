@@ -8,14 +8,14 @@ import { getMyAccess } from "@/lib/voice-access";
 import { ASSESSMENTS, type AssessmentKind } from "@/lib/voice-assessments";
 
 export const dynamic = "force-dynamic";
-const LABEL: Record<string, string> = { assigned: "Not started", in_progress: "In progress — resume", submitted: "Submitted", reviewed: "Reviewed" };
+const LABEL: Record<string, string> = { declined: "You chose not to take this", assigned: "Not started", in_progress: "In progress — resume", submitted: "Submitted", reviewed: "Reviewed" };
 
 export default async function MyAssessments() {
   const { user } = await getCurrentUserAndRoles();
   if (!user) redirect("/login");
   if (!(await getStudentPrograms(user.id)).includes("voice")) redirect("/dashboard");
   const supabase = createClient(); const access = await getMyAccess(supabase);
-  const { data } = await supabase.from("dp_voice_assessments").select("id,kind,status,assigned_at,submitted_at,assign_reason").order("assigned_at", { ascending: false });
+  const { data } = await supabase.from("dp_voice_assessments").select("id,kind,status,assigned_at,submitted_at,assign_reason,consented_at").order("assigned_at", { ascending: false });
   return (
     <div className="space-y-6 pb-20">
       <header><Link href="/voice" className="inline-flex min-h-[44px] items-center font-ui text-sm font-semibold text-[#630000] underline">← Voice Home</Link>
@@ -26,9 +26,9 @@ export default async function MyAssessments() {
         <ul className="space-y-3">{(data ?? []).map((a) => (
           <li key={a.id} className="rounded-2xl border border-[#630000]/15 bg-white p-4">
             <p className="font-ui text-lg font-bold text-[#630000]">{ASSESSMENTS[a.kind as AssessmentKind]?.title ?? a.kind}</p>
-            <p className="font-body text-sm text-[#4a3a3a]">{LABEL[a.status] ?? a.status}</p>
+            <p className="font-body text-sm text-[#4a3a3a]">{a.status === "assigned" && !a.consented_at ? "Waiting for your decision" : LABEL[a.status] ?? a.status}</p>
             {a.assign_reason && <p className="font-body text-sm text-[#201414]">Your coach chose this because: {a.assign_reason}</p>}
-            <Link href={`/voice/assessments/${a.id}`} className="mt-2 inline-flex min-h-[44px] items-center rounded-full bg-[#630000] px-5 font-ui text-sm font-bold text-white">{["assigned", "in_progress"].includes(a.status) ? (a.status === "assigned" ? "Start" : "Resume") : "View"}</Link>
+            <Link href={`/voice/assessments/${a.id}`} className="mt-2 inline-flex min-h-[44px] items-center rounded-full bg-[#630000] px-5 font-ui text-sm font-bold text-white">{a.status === "assigned" && !a.consented_at ? "Review the invitation" : ["assigned", "in_progress"].includes(a.status) ? (a.status === "assigned" ? "Start" : "Resume") : "View"}</Link>
           </li>))}</ul>}
     </div>
   );

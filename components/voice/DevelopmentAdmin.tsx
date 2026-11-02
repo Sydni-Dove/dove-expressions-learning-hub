@@ -42,10 +42,11 @@ export function TrackApproval({ studentId, selected, approved, tongues }: { stud
   );
 }
 
-export interface Access { enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string }
-const STATUS_TEXT: Record<string, string> = { none: "no package yet", pending: "payment pending", partial: "installments in progress", paid: "paid", refunded: "refunded", failed: "payment failed", complimentary: "complimentary (not a verified payment)" };
+export interface Access { enrolled: boolean; prospect: boolean; paid: boolean; paid_status: string; paid_via?: string | null }
+const STATUS_TEXT: Record<string, string> = { none: "no package yet", pending: "payment pending", partial: "installments in progress", paid: "paid", refunded: "refunded or revoked", failed: "payment failed", complimentary: "complimentary" };
+const VIA_TEXT: Record<string, string> = { woocommerce: "paid via WooCommerce", offline_payment: "paid offline, verified", complimentary: "complimentary access" };
 export function AccessBadge({ a }: { a: Access }) {
-  return <span className={`rounded-full px-2.5 py-1 font-ui text-xs font-semibold ${a.paid ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"}`}>{a.enrolled ? "Enrolled" : a.prospect ? "Invited for intake" : "Not enrolled"} · {a.paid ? "paid access verified" : `no verified payment (${STATUS_TEXT[a.paid_status] ?? a.paid_status})`}</span>;
+  return <span className={`rounded-full px-2.5 py-1 font-ui text-xs font-semibold ${a.paid ? "bg-green-100 text-green-900" : "bg-amber-100 text-amber-900"}`}>{a.enrolled ? "Enrolled" : a.prospect ? "Invited for intake" : "Not enrolled"} · {a.paid ? `paid access verified (${VIA_TEXT[a.paid_via ?? ""] ?? "verified"})` : `no verified payment (${STATUS_TEXT[a.paid_status] ?? a.paid_status})`}</span>;
 }
 
 export function AssignAssessment({ studentId, selected, approved, access }: { studentId: string; selected: TrackKey[]; approved: TrackKey[]; access: Access }) {
@@ -349,5 +350,64 @@ export function SampleDraft({ scenarioId, title, units, existingSampleId, roster
       <button className={btn2} disabled={busy || working || !student} onClick={go}>Create draft for review</button>
       <p className="font-body text-xs text-[#4a3a3a]">The draft is private to staff and cannot be approved until you confirm it reflects this student&apos;s own findings.</p>{status}
     </div>
+  );
+}
+
+export interface AccessGrant { id: string; kind: string; method: string; reference: string | null; reason: string | null; amount_cents: number | null; received_on: string; recorded_at: string; revoked_at: string | null; revoke_reason: string | null }
+export interface AccessEvent { id: string; event: string; at: string; details: Record<string, unknown> | null }
+const METHOD_LABEL: Record<string, string> = { cash: "Cash", check: "Check", square: "Square", bank_transfer: "Bank transfer", other_offline: "Other offline payment", complimentary: "Complimentary" };
+/** Verified offline payments and complimentary access, recorded by authorized staff only, with an audit trail. Recording access never enrolls anyone. */
+export function AccessAdmin({ studentId, access, canVerify, tiers, grants, events }: {
+  studentId: string; access: Access & { paid_via?: string | null }; canVerify: boolean; tiers: { id: string; name: string; assessments_included: number | null }[]; grants: AccessGrant[]; events: AccessEvent[];
+}) {
+  const { run, busy, status } = useAct();
+  const [kind, setKind] = useState<"offline_payment" | "complimentary">("offline_payment"); const [method, setMethod] = useState("cash"); const [tier, setTier] = useState(tiers[0]?.id ?? "");
+  const [ref, setRef] = useState(""); const [reason, setReason] = useState(""); const [on, setOn] = useState(new Date().toISOString().slice(0, 10)); const [amount, setAmount] = useState(""); const [assess, setAssess] = useState("");
+  const via = access.paid_via === "woocommerce" ? "a verified WooCommerce payment" : access.paid_via === "offline_payment" ? "a verified offline payment" : access.paid_via === "complimentary" ? "complimentary access (not a payment)" : null;
+  return (
+    <div className="space-y-4">
+      <p className="font-body text-sm text-[#201414]" role="status">{access.paid ? `Access is open through ${via ?? "a verified package"}.` : "No verified payment or complimentary access yet."} {access.enrolled ? "Enrolled in Voice." : access.paid ? "Eligible, but not enrolled: enrollment is your decision." : "Not enrolled."}</p>
+      {!access.enrolled && <div><button className={btn2} disabled={busy} onClick={() => confirm("Enroll this person in Voice? Payment confirmation only makes them eligible; this is the step that enrolls them.") && run("dp_voice_enroll_student", { student: studentId, enroll_note: null }, "Enrolled in Voice.")}>Enroll in Voice</button></div>}
+      {canVerify ? (
+        <form className="space-y-2 rounded-2xl border border-[#630000]/15 bg-white p-3" onSubmit={(e) => e.preventDefault()}>
+          <h3 className="font-display text-lg text-[#630000]">Record offline payment or complimentary access</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="font-ui text-xs font-semibold">What is this?<select className={field} value={kind} onChange={(e) => { const k = e.target.value as typeof kind; setKind(k); setMethod(k === "complimentary" ? "complimentary" : "cash"); }}><option value="offline_payment">A payment received outside the store</option><option value="complimentary">Complimentary access (no payment)</option></select></label>
+            {kind === "offline_payment" && <label className="font-ui text-xs font-semibold">How was it paid?<select className={field} value={method} onChange={(e) => setMethod(e.target.value)}>{["cash", "check", "square", "bank_transfer", "other_offline"].map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}</select></label>}
+            <label className="font-ui text-xs font-semibold">Package<select className={field} value={tier} onChange={(e) => setTier(e.target.value)}>{tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+            <label className="font-ui text-xs font-semibold">{kind === "complimentary" ? "Date granted" : "Date received"}<input type="date" className={field} value={on} onChange={(e) => setOn(e.target.value)} /></label>
+            {kind === "offline_payment" ? <label className="font-ui text-xs font-semibold">Receipt, check or transaction reference (required)<input className={field} value={ref} maxLength={200} onChange={(e) => setRef(e.target.value)} /></label>
+              : <label className="font-ui text-xs font-semibold sm:col-span-2">Why is this complimentary? (required)<input className={field} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></label>}
+            {kind === "offline_payment" && <label className="font-ui text-xs font-semibold">Amount received in dollars (optional)<input type="number" min={0} step="0.01" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} /></label>}
+            <label className="font-ui text-xs font-semibold">Assessments included (blank = the package&apos;s setting)<input type="number" min={0} className={field} value={assess} onChange={(e) => setAssess(e.target.value)} /></label>
+          </div>
+          <button className={btn} disabled={busy || !tier || (kind === "offline_payment" ? !ref.trim() : !reason.trim())}
+            onClick={() => run("dp_voice_record_access_grant", { student: studentId, tier, grant_kind: kind, grant_method: kind === "complimentary" ? "complimentary" : method, grant_reference: ref, grant_reason: reason, paid_on: on, amount: amount ? Math.round(Number(amount) * 100) : null, assessments: assess === "" ? null : Number(assess), expiry: null }, kind === "complimentary" ? "Complimentary access recorded." : "Offline payment verified and recorded.")}>{kind === "complimentary" ? "Grant complimentary access" : "Verify and record payment"}</button>{status}
+        </form>) : <p className="font-body text-sm text-[#4a3a3a]">Only a super admin or a faculty member can verify an offline payment or grant complimentary access.</p>}
+      {canVerify && grants.length > 0 && (
+        <ul aria-label="Access records" className="space-y-2">{grants.map((g) => (
+          <li key={g.id} className="rounded-xl bg-[#FBF4F1] p-3 font-body text-sm">
+            <p className="font-semibold">{g.kind === "complimentary" ? "Complimentary access (not a payment)" : `Offline payment · ${METHOD_LABEL[g.method] ?? g.method}`} · {new Date(g.received_on).toLocaleDateString()}{g.revoked_at ? " · REVOKED" : ""}</p>
+            <p>{g.kind === "complimentary" ? `Reason: ${g.reason}` : `Reference: ${g.reference}${g.amount_cents != null ? ` · $${(g.amount_cents / 100).toFixed(2)}` : ""}`}</p>
+            {g.revoked_at && <p>Revoked: {g.revoke_reason}</p>}
+            {!g.revoked_at && <button className="min-h-[44px] font-ui text-xs font-semibold text-[#630000] underline" disabled={busy} onClick={() => { const why = prompt("Why is this access being revoked? (required)"); if (why?.trim()) run("dp_voice_revoke_access_grant", { grant_id: g.id, why }, "Access revoked. Everything the student has already done stays."); }}>Revoke</button>}
+          </li>))}</ul>)}
+      {canVerify && events.length > 0 && <details><summary className="min-h-[44px] cursor-pointer font-ui text-sm font-semibold text-[#630000]">Audit trail ({events.length})</summary><ol className="mt-2 space-y-1 font-body text-sm">{events.map((e) => <li key={e.id}>{new Date(e.at).toLocaleString()} · {e.event.replace(/_/g, " ")}</li>)}</ol></details>}
+    </div>
+  );
+}
+
+/** The student's decision on an assigned assessment: accept it or decline it at no cost. */
+export function AssessmentConsent({ id, reason }: { id: string; reason: string | null }) {
+  const router = useRouter(); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  async function decide(accept: boolean) { setBusy(true); setErr(""); const r = await callRpc("dp_assessment_consent", { aid: id, accept }); setBusy(false); if (!r.ok) setErr(r.error); else router.refresh(); }
+  return (
+    <section aria-labelledby="consent-h" className="rounded-2xl border border-[#630000]/20 bg-[#FBF4F1] p-5">
+      <h2 id="consent-h" className="font-display text-xl text-[#630000]">Your coach is inviting you to take this</h2>
+      {reason && <p className="mt-2 font-body">Why: {reason}</p>}
+      <p className="mt-2 font-body text-sm text-[#4a3a3a]">It is optional. You may skip any question, your answers are private to you and your Voice instructor, and nothing is scored or used to judge you. If you decline, nothing is lost and your coaching continues.</p>
+      <div className="mt-3 flex flex-wrap gap-3"><button className={btn} disabled={busy} onClick={() => decide(true)}>Yes, I&apos;d like to take it</button><button className={btn2} disabled={busy} onClick={() => decide(false)}>No thanks</button></div>
+      {err && <p role="alert" className="mt-2 font-ui text-sm text-[#9b1c1c]">{err}</p>}
+    </section>
   );
 }
