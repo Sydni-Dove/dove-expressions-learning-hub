@@ -220,3 +220,8 @@ confirmed. **Open question:** monthly four-lesson and 12-week prices at 60 minut
 ## Update: Nov 2 (owner decisions on access)
 - Offline/cash/Square/complimentary access: authorized-staff-only, audited, distinguishes complimentary from paid. Enrollment stays instructor-controlled (explicit step). Assessment entitlements: blank = instructor decides (new default), number = cap, 0 = none. Assessments need the student's consent. Completed work stays available after refund/expiry/revocation. Details: `docs/voice-access-rules.md`. Still unapplied: migration `20261101090000` (and all earlier Voice migrations).
 - Assessment A: waiting for the Word document ("From Vision to Reality", Day 1, "Discerning God's Voice").
+
+## Update: Nov 2 (Worship Development teachings)
+- Three instructor-led teachings in a reusable library: 1 Praise Is What I Do, 2 The Importance of Being in the Word, 3 The Psyche of a Praiser (with the featured "Gifted but Still Growing" subsection and the leaders' section). Source: `lib/voice-teaching/*` (single source); `scripts/generate-teaching-seed.ts` writes the seed migration; a unit test fails on drift.
+- New UNAPPLIED migrations `20261102090000` (schema + `dp_assign_teaching_module`) and `20261102100000` (seed). Rollbacks generated and tested. Details: `docs/voice-worship-teachings.md`.
+- Staff: `/staff/voice/worship` (library) and `/staff/voice/worship/[key]` (private notes, assign, assigned list). Student: `/voice/worship` and `/voice/worship/[key]`, plus a Voice Home link that appears only once something is assigned. Nothing is assigned or enrolled automatically.

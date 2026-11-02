@@ -69,6 +69,7 @@ export const staffNav: NavItem[] = [
   { href: "/staff/voice", label: "Voice Command Center", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/development", label: "Voice Student Development", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/curriculum", label: "Voice Curriculum", roles: ["faculty", "teacher", "super_admin"] },
+  { href: "/staff/voice/worship", label: "Worship Development", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/recordings", label: "Voice Recordings", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/packages", label: "Voice Packages", roles: ["faculty", "teacher", "super_admin"] },
   { href: "/staff/voice/library", label: "Voice Library", roles: ["faculty", "teacher", "super_admin"] },

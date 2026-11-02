@@ -11,7 +11,8 @@ import { diff, snapshot, type Snapshot } from "../tests/sql/snapshot";
 export const VOICE_MIGRATIONS = [
   "20261029090000_dp_voice_recordings_scheduling_consultations.sql", "20261029100000_dp_voice_draft_lesson_content.sql", "20261029110000_dp_voice_student_resources.sql",
   "20261030090000_dp_voice_practice_recordings.sql", "20261030100000_dp_voice_intake_assessments_plans.sql", "20261030110000_dp_voice_curriculum_seed.sql",
-  "20261031090000_dp_voice_plan_revisions_ratings_imports.sql", "20261101090000_dp_voice_onboarding_payment_access.sql"
+  "20261031090000_dp_voice_plan_revisions_ratings_imports.sql", "20261101090000_dp_voice_onboarding_payment_access.sql",
+  "20261102090000_dp_voice_worship_teachings.sql", "20261102100000_dp_voice_worship_teachings_seed.sql"
 ];
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const tbl = (k: string) => k.replace(/^public\./, "");
@@ -89,6 +90,8 @@ export async function planAll() {
         `delete from dp_voice_exercises where curriculum_key is not null;`,
         `delete from dp_voice_skills s where s.slug in (${added.map(q).join(", ")}) and not exists (select 1 from dp_voice_exercises e where e.skill_id=s.id);`);
     }
+    if (file.startsWith("20261102100000")) extra.dataSql!.push(`-- Removes the seeded Worship Development library. Modules already ASSIGNED to a student are kept (the assignment references the module), so those rows stay.`,
+      `delete from dp_voice_teaching_modules m where not exists (select 1 from dp_assignments a where a.teaching_module_id=m.id);`);
     if (file.startsWith("20261029090000")) extra.warnings!.push("Dropping the recording/testimonial tables deletes their rows. Export them first; storage objects must be removed through the Storage API.");
     if (file.startsWith("20261029110000")) extra.warnings!.push("This migration also ran 'revoke all on all functions in schema dp_private from public, anon' and granted execute on them to authenticated. That blanket change cannot be reversed from a diff; restore from the ACL snapshot taken before applying (see docs/voice-release-plan.md).");
     if (file.startsWith("20261030090000")) extra.warnings!.push("Dropping dp_practice_recordings loses the link to student recordings stored in R2. Export the object keys and remove the R2 objects separately.");

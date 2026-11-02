@@ -36,6 +36,8 @@ export default async function VocalCoachingPage() {
   let attempts: { id: string; assignment_id: string; attempt_no: number; file_urls: string[]; submitted_at: string }[] = [];
   let feedback: { id: string; submission_id: string; content: string | null; created_at: string }[] = [];
   let loadError = false;
+  // Worship Development shows only once the instructor has assigned at least one teaching (row-level security filters the rows).
+  const hasTeachings = isStudent ? ((await supabase.from("dp_voice_teaching_modules").select("id", { count: "exact", head: true })).count ?? 0) > 0 : false;
   if (isStudent) {
     const [a, s, d, t] = await Promise.all([
       supabase.from("dp_assignments").select("id,title,due_at,song,goal,practice_steps,lesson_id,course_id").order("due_at", { ascending: true, nullsFirst: false }),
@@ -78,6 +80,7 @@ export default async function VocalCoachingPage() {
               <Link href="/assignments" className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#FDFDFD] px-5 py-3 font-ui text-sm font-bold text-[#630000] hover:bg-[#F2DFD8]">Open my practice <ArrowUpRight className="h-4 w-4" /></Link>
               <Link href="/voice/recordings" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">My Practice Recordings</Link>
               <Link href="/voice/resources" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">Practice resources</Link>
+              {hasTeachings && <Link href="/voice/worship" className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-ui text-sm font-semibold text-white hover:bg-white/10">Worship Development</Link>}
             </div>
           </div>
           <section aria-labelledby="next-lesson" className="rounded-3xl bg-[#FDFDFD] p-6 text-[#1B1717] shadow-lg lg:col-span-2">

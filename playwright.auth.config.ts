@@ -16,6 +16,7 @@ export default defineConfig({
     { name: "development", testMatch: /development\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
     { name: "gaps", testMatch: /gaps\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
     { name: "access", testMatch: /access\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
+    { name: "teachings", testMatch: /teachings\.spec\.ts/, use: { ...devices["Desktop Chrome"], launchOptions } },
     { name: "responsive", testMatch: /responsive\.spec\.ts/, use: { launchOptions } }
   ]
 });
