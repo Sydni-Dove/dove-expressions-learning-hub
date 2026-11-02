@@ -16,7 +16,8 @@ export async function getCurrentUserAndRoles() {
   if (!user) return { user: null, roles: [] as DpRole[] };
 
   const { data: roleRows } = await supabase.from("dp_user_roles").select("role").eq("user_id", user.id);
-  const roles = (roleRows ?? []).map((r) => r.role as DpRole);
+  const { data: scopedRows } = await supabase.from("dp_role_assignments").select("role").eq("user_id", user.id);
+  const roles = [...new Set([...(roleRows ?? []), ...(scopedRows ?? [])].map((r) => r.role as DpRole))];
 
   return { user, roles: roles.length ? roles : (["student"] as DpRole[]) };
 }
@@ -38,3 +39,4 @@ export async function requireRoles(allowed: DpRole[]) {
   if (!hasAnyRole(roles, allowed)) redirect("/dashboard");
   return { user: user!, roles };
 }
+

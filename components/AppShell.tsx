@@ -65,6 +65,11 @@ const ICONS: Record<string, LucideIcon> = {
   "/help": HelpCircle,
   "/staff/dashboard": LayoutDashboard,
   "/staff/students": Users2,
+  "/staff/voice": MicVocal,
+  "/staff/voice/library": BookOpen,
+  "/staff/voice/packages": FolderKanban,
+  "/staff/voice/plans": ClipboardCheck,
+  "/voice/resources": BookOpen,
   "/staff/voice-reviews": MicVocal,
   "/staff/programs": FolderKanban,
   "/staff/courses": GraduationCap,
@@ -114,7 +119,7 @@ function StudentNavGroups({ pathname, programs, onNavigate }: { pathname: string
   const isCreative = programs.includes("creative");
   const permitted = (href: string) => {
     if (["/profile", "/help", "/report"].includes(href)) return true;
-    if (href === "/voice") return isVoice;
+    if (href === "/voice" || href === "/voice/resources") return isVoice;
     if (href === "/creative-studio") return isCreative;
     if (["/discipleship", "/discipleship/journey", "/wiring", "/plan", "/prayer", "/notes", "/program"].includes(href)) return isDisciple;
     if (href === "/dashboard") return false;
