@@ -44,7 +44,7 @@ beforeAll(async () => {
 
 describe("migrations", () => {
   it("existing courses default to open + reflective", async () => {
-    const r = await db.query<any>("select count(*)::int n from dp_courses where title not in ('How to Make an App with AI') and (access_mode <> 'open' and title not in ('Protected course','Program-scoped protected'))");
+    const r = await db.query<any>("select count(*)::int n from dp_courses where title not in ('How to Make an App with AI') and (access_mode <> 'open' and title not in ('Protected course','Program-scoped protected','Worship Development'))");
     expect(r.rows[0].n).toBe(0);
     const seeded = await db.query<any>("select access_mode, lesson_style, is_published, program_id from dp_courses where slug='how-to-make-an-app-with-ai'");
     expect(seeded.rows[0]).toMatchObject({ access_mode: "enrolled", lesson_style: "practical", is_published: false, program_id: null });
@@ -60,6 +60,48 @@ describe("migrations", () => {
     const l = await db.query<any>("select count(*)::int n from dp_lessons l join dp_modules m on m.id=l.module_id join dp_courses c on c.id=m.course_id where c.slug='how-to-make-an-app-with-ai'");
     expect(l.rows[0].n).toBe(0);
   });
+});
+
+describe("Worship Development draft shell (0029)", () => {
+  it("is an unpublished, enrollment-only course in Voice Studio under the vocal-coaching program", async () => {
+    const r = await db.query<any>("select c.title,c.is_published,c.content_status,c.access_mode,c.lesson_style,c.description,a.area_key,p.slug program from dp_courses c join dp_learning_areas a on a.id=c.area_id join dp_programs p on p.id=c.program_id where c.slug='worship-development'");
+    expect(r.rows[0]).toMatchObject({ title: "Worship Development", is_published: false, content_status: "draft", access_mode: "enrolled", lesson_style: "reflective", area_key: "voice_studio", program: "vocal-coaching", description: null });
+  });
+  it("has Start Here + 3 modules and 11 empty draft lessons in the chosen order (Teaching 1, 11, then 2-10)", async () => {
+    const r = await db.query<any>("select l.title, l.status, l.content_status from dp_lessons l join dp_modules m on m.id=l.module_id join dp_courses c on c.id=m.course_id where c.slug='worship-development' order by m.order_index, l.order_index");
+    expect(r.rows).toHaveLength(11);
+    const starts = r.rows.map((x: any) => x.title.split(/[:?]/)[0]);
+    expect(starts).toEqual([
+      "Praise Is What I Do", "What Is a True Worshiper", "The Importance of Being in the Word",
+      "The Psyche of a Praiser", "What Did You Bring to the Altar", "The Heart of a Praiser", "When Your Heart Interrupts Your Worship",
+      "The Purpose, Power and Functions of Praise", "The Worshiping Warrior", "From Scripture and Testimony to Spontaneous Worship", "The Tabernacle of David"
+    ]);
+    expect(r.rows.every((x: any) => x.status === "draft" && x.content_status === "draft")).toBe(true);
+    const mods = await db.query<any>("select m.title from dp_modules m join dp_courses c on c.id=m.course_id where c.slug='worship-development' order by m.order_index");
+    expect(mods.rows.map((x: any) => x.title)).toEqual(["Start Here", "Module 1: A Life of Worship", "Module 2: Heart and Offering", "Module 3: Praise in Action"]);
+  });
+  it("contains no lesson text at all: zero blocks", async () => {
+    const r = await db.query<any>("select count(*)::int n from dp_lesson_blocks b join dp_lessons l on l.id=b.lesson_id join dp_modules m on m.id=l.module_id join dp_courses c on c.id=m.course_id where c.slug='worship-development'");
+    expect(r.rows[0].n).toBe(0);
+  });
+  it("students (enrolled or not) cannot read its draft lessons; staff can", async () => {
+    const course = (await db.query<any>("select id, area_id from dp_courses where slug='worship-development'")).rows[0];
+    await db.query("insert into dp_enrollments(user_id,area_id,scope_type,scope_id,status) values ($1,$2,'course',$3,'active')", [A, course.area_id, course.id]);
+    const q = "select count(*)::int n from dp_lessons l join dp_modules m on m.id=l.module_id where m.course_id=$1";
+    expect((await asUser<any>(db, A, q, [course.id])).rows[0].n).toBe(0);
+    expect((await asUser<any>(db, B, q, [course.id])).rows[0].n).toBe(0);
+    expect((await asUser<any>(db, ADMIN, q, [course.id])).rows[0].n).toBe(11);
+    await db.query("delete from dp_enrollments where scope_id=$1", [course.id]);
+  });
+  it("rollback removes only the shell and leaves Voice Studio and the program", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { db: d } = await createDb();
+    await d.exec(fs.readFileSync(path.join(__dirname, "../../supabase/rollback/ROLLBACK_0029_worship_development.sql"), "utf8"));
+    expect((await d.query<any>("select count(*)::int n from dp_courses where slug='worship-development'")).rows[0].n).toBe(0);
+    expect((await d.query<any>("select count(*)::int n from dp_programs where slug='vocal-coaching'")).rows[0].n).toBe(1);
+    expect((await d.query<any>("select count(*)::int n from dp_learning_areas where area_key='voice_studio'")).rows[0].n).toBe(1);
+  }, 240000);
 });
 
 describe("course access (RLS)", () => {
