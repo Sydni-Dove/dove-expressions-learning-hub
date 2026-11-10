@@ -1,7 +1,7 @@
 // Single-origin gateway (what Kong does for hosted Supabase): /auth/v1 -> GoTrue, /rest/v1 -> PostgREST, /storage/v1 -> Storage.
 import http from "node:http";
 
-const routes = [["/auth/v1", 9999], ["/rest/v1", 3000], ["/storage/v1", 5000]];
+const routes = [["/auth/v1", 9999], ["/rest/v1", 3000], ["/storage/v1", 5050]];
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS", "access-control-expose-headers": "*" };
 
 http.createServer((req, res) => {

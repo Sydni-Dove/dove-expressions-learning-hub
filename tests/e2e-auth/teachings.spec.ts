@@ -67,7 +67,7 @@ test.describe.serial("teaching editor", () => {
     await box.click(); await i.page.keyboard.press("Control+End"); await i.page.keyboard.type(" Added by the instructor.");
     await saved(i.page);
     // formatting buttons work
-    await box.click(); await i.page.keyboard.press("Control+A"); await i.page.getByRole("button", { name: "Bold" }).click();
+    await box.click(); await i.page.keyboard.press("ControlOrMeta+A"); await i.page.getByRole("button", { name: "Bold" }).click();
     await saved(i.page);
     await i.page.reload();
     await expect(i.page.getByLabel("Title", { exact: true })).toHaveValue("Praise Is What I Do (edited)");

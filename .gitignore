@@ -15,3 +15,7 @@ testing/local-supabase/service.txt
 
 # Python wheels were committed by mistake; never track them
 *.whl
+
+# Local test environment: generated at start, never commit
+testing/local-supabase/LOGINS.txt
+testing/local-supabase/.run/

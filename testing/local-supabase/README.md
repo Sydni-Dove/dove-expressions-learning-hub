@@ -10,7 +10,18 @@ It is not your hosted project. Hosted-only behaviour (email delivery, rate limit
 GoTrue versions Supabase runs today, network latency) is not reproduced. Re-run the smoke checklist below against the real project
 after the migrations are approved and applied.
 
-## Run it
+## Easiest way: one script
+```
+testing/local-supabase/local.sh start    # Docker stack + fake R2 + app on http://localhost:3111 (about 2 minutes the first time)
+testing/local-supabase/local.sh status
+testing/local-supabase/local.sh logins   # tells you where the generated, git-ignored login file is
+testing/local-supabase/local.sh test     # browser suite (add e.g. --project=teachings to run one group)
+testing/local-supabase/local.sh stop     # stops everything and deletes the throwaway data
+```
+Keys, the login file, logs and process ids are generated into git-ignored paths. macOS note: AirPlay Receiver uses port 5000, so the test
+storage service is published on 5050. If Playwright wants a Chromium build you do not have, set `PW_CHROMIUM` to an installed one.
+
+## Run it step by step
 ```
 docker compose version                      # Docker with Compose is required
 node testing/local-supabase/proxy.mjs &     # single-origin gateway on :54321
