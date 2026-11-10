@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles, hasAnyRole } from "@/lib/roles";
 import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
 import { orderPublishedLessons, computeLessonNeighbors } from "@/lib/lesson-nav";
 import CourseLocked from "@/components/CourseLocked";
+import LessonLocked from "@/components/LessonLocked";
 import LessonExperience from "@/components/lesson/LessonExperience";
 import LessonReflectionForm from "@/components/LessonReflectionForm";
 import MarkCompleteButton from "@/components/MarkCompleteButton";
@@ -29,11 +31,21 @@ export default async function LessonPage({ params }: { params: { courseId: strin
     .maybeSingle();
   if (!lesson) notFound();
 
+  // Teaching content is closed until the student's payments cover it; the lesson itself, their progress and records stay visible.
+  const { data: lock } = await supabase.rpc("dp_my_lesson_lock", { target_lesson: lesson.id });
+  if (lock?.locked) {
+    return <LessonLocked title={lesson.title} backHref={`/courses/${params.courseId}`} neededLessons={lock.needed_lessons ?? 1} neededLevel={lock.needed_level ?? 0} unlockedNow={lock.unlocked_now ?? 0} />;
+  }
+
   const { data: module_ } = await supabase.from("dp_modules").select("id,course_id,order_index").eq("id", lesson.module_id).maybeSingle();
   if (!module_ || module_.course_id !== params.courseId) notFound();
 
-  const { data: course } = await supabase.from("dp_courses").select("id,title,instructor_id").eq("id", params.courseId).maybeSingle();
+  const { data: course } = await supabase.from("dp_courses").select("id,title,instructor_id,dp_programs(slug)").eq("id", params.courseId).maybeSingle();
   if (!course) notFound();
+
+  const isCoaching = (course.dp_programs as unknown as {slug:string}|null)?.slug === "vocal-coaching";
+  const {data:practiceAssignments} = isCoaching ? await supabase.from("dp_assignments")
+    .select("id,title").eq("lesson_id",lesson.id) : {data:[]};
 
   let instructorName: string | null = null;
   if (course.instructor_id) {
@@ -102,7 +114,9 @@ export default async function LessonPage({ params }: { params: { courseId: strin
       reflectionForm={<LessonReflectionForm lessonId={lesson.id} userId={user!.id} />}
       lessonStyle={settings.lessonStyle}
       nav={{ previousId: neighbors.previousId, nextId: neighbors.nextId, isLast: neighbors.isLast }}
-      myBuildHref={settings.lessonStyle === "practical" ? `/courses/${course.id}/my-build` : undefined}
+      coachingPractice={isCoaching ? <section id="completion" className="space-y-4 py-8"><h2 className="font-display text-2xl text-burgundy">Continue to your guided practice</h2><p className="font-body text-sm">Save your practice and submit it for private instructor review. Your lesson progress updates when your instructor approves the assigned work.</p>{practiceAssignments?.length ? practiceAssignments.map(a=><Link className="btn-primary mr-3 inline-flex" key={a.id} href={`/assignments#assignment-${a.id}`}>{a.title}</Link>) : <p className="font-body text-sm">Your instructor will assign personalized practice when you are ready.</p>}</section> : undefined}
+      myBuildHref={!isCoaching && settings.lessonStyle === "practical" ? `/courses/${course.id}/my-build` : undefined}
     />
   );
 }
+

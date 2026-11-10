@@ -4,3 +4,18 @@ node_modules/
 .vercel/
 .DS_Store
 *.tsbuildinfo
+
+# local authenticated test stack output
+test-results/
+testing/local-supabase/ids.json
+testing/local-supabase/anon.txt
+testing/local-supabase/results.json
+testing/local-supabase/screenshots/
+testing/local-supabase/service.txt
+
+# Python wheels were committed by mistake; never track them
+*.whl
+
+# Local test environment: generated at start, never commit
+testing/local-supabase/LOGINS.txt
+testing/local-supabase/.run/
