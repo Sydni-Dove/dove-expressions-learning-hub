@@ -88,6 +88,13 @@ export default async function LessonPage({ params }: { params: { courseId: strin
       : { data: [] };
     const guidedOrder = orderPublishedLessons(allModules ?? [], (visibleLessons ?? []).map((l: any) => ({ ...l, status: "published" })));
     const guidedNeighbors = computeLessonNeighbors(guidedOrder, lesson.id);
+    // A welcome ("How to use this course") lesson isn't a numbered section, so it is left out of
+    // "Section x of y" while Next/Previous still pass through it.
+    const { data: welcomeIntros } = guidedOrder.length
+      ? await supabase.from("dp_lesson_blocks").select("lesson_id").in("lesson_id", guidedOrder.map((l) => l.id)).eq("block_type", "guided_intro").eq("content->>kind", "welcome")
+      : { data: [] as { lesson_id: string }[] };
+    const welcomeIds = new Set((welcomeIntros ?? []).map((w: any) => w.lesson_id));
+    const sectionPosition = welcomeIds.size ? computeLessonNeighbors(guidedOrder.filter((l) => !welcomeIds.has(l.id)), lesson.id) : guidedNeighbors;
     const { data: assignmentRows } = await supabase
       .from("dp_assignments")
       .select("id")
@@ -124,7 +131,7 @@ export default async function LessonPage({ params }: { params: { courseId: strin
         feedback={(feedback ?? []) as any[]}
         resources={(resources ?? []) as any[]}
         isStaffPreview={isStaff}
-        position={{ index: guidedNeighbors.position, total: guidedNeighbors.total }}
+        position={{ index: sectionPosition.position, total: sectionPosition.total }}
         nextLessonId={guidedNeighbors.nextId}
         prevLessonId={guidedNeighbors.previousId}
         lessonCompleted={isComplete}

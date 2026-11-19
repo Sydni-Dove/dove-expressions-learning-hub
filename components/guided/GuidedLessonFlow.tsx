@@ -12,6 +12,7 @@ import {
   buildSubmissionContent,
   clampScreen,
   draftFromSubmission,
+  isWelcomeLesson,
   minutesLabel,
   normalizeDraft,
   studentCanEdit,
@@ -66,6 +67,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const screens = useMemo(() => buildScreens(guided), [guided]);
+  const welcome = isWelcomeLesson(guided);
 
   // Reflect a successful submit immediately; the server data (props) takes over after the refresh.
   const [localStatus, setLocalStatus] = useState<SubmissionStatus | null>(null);
@@ -280,20 +282,20 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
       <header className="mb-4">
         <div className="flex items-center justify-between gap-3">
           <Link href={`/courses/${courseId}`} className="inline-flex min-h-[44px] items-center font-ui text-sm text-charcoal/60 underline">← {courseTitle}</Link>
-          <span className="font-ui text-xs uppercase tracking-wide text-charcoal/50">Section {position.index} of {position.total}</span>
+          <span className="font-ui text-xs uppercase tracking-wide text-charcoal/50">{welcome ? "Start here" : `Section ${position.index} of ${position.total}`}</span>
         </div>
-        <ol className="mt-3 flex gap-1.5" aria-label="Lesson steps">
+        {!welcome && <ol className="mt-3 flex gap-1.5" aria-label="Lesson steps">
           {stepNames.map((n) => (
             <li key={n} aria-current={n === currentStep ? "step" : undefined} className={`flex-1 rounded-pill px-2 py-1 text-center font-ui text-[0.68rem] font-bold uppercase tracking-wide ${n === currentStep ? "bg-burgundy text-soft" : "bg-burgundy/10 text-burgundy/60"}`}>
               {n}
             </li>
           ))}
-        </ol>
+        </ol>}
       </header>
 
       {isStaffPreview && (
         <div role="note" className="mb-4 rounded-card border border-sunrise/40 bg-sunrise/10 p-3 font-ui text-sm text-charcoal/80" data-testid="staff-preview-banner">
-          <strong>Instructor preview{lessonStatus !== "published" ? " (draft)" : ""}.</strong> This is what a student sees{lessonStatus !== "published" ? ", but students can't open this lesson yet" : ""}. Your answers save as your own private draft; submitting creates a real submission under your account.
+          <strong>Instructor preview{lessonStatus !== "published" ? " (draft)" : ""}.</strong> This is what a student sees{lessonStatus !== "published" ? ", but students can't open this lesson yet" : ""}.{welcome ? "" : " Your answers save as your own private draft; submitting creates a real submission under your account."}
         </div>
       )}
       {draftVersionDiffers && (
@@ -358,6 +360,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
                 <p key={i} className="whitespace-pre-line">{p}</p>
               ))}
             </div>
+            {welcome && isLast && <div className="mt-6">{workbook}</div>}
           </section>
         )}
 
@@ -520,6 +523,8 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
           </div>
           {!isLast ? (
             <button type="button" className="btn-primary" onClick={() => go(1)} aria-label="Go to the next screen" data-testid="next">{nextLabel} →</button>
+          ) : welcome && nextLessonId ? (
+            <Link href={`/courses/${courseId}/lessons/${nextLessonId}`} className="btn-primary" data-testid="welcome-begin">Begin the course →</Link>
           ) : (
             <span className="w-[84px]" aria-hidden="true" />
           )}

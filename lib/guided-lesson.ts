@@ -23,6 +23,8 @@ export interface GuidedIntro {
   reading: string[];
   timing: string;
   exercise_timing: string;
+  /** A "How to use this course" style lesson: teaching pages only, no questions, practice or submit. */
+  welcome: boolean;
 }
 export interface GuidedPage { page_id: string; title: string; body: string }
 export interface GuidedCheck { check_id: string; prompt: string; options: string[] }
@@ -55,7 +57,7 @@ export function parseGuidedLesson(blocks: RawBlock[]): GuidedLesson {
     const c = b.content ?? {};
     switch (b.block_type) {
       case "guided_intro":
-        out.intro ??= { section_id: str(c.section_id), goal: str(c.goal), reading: strArray(c.reading), timing: str(c.timing), exercise_timing: str(c.exercise_timing) };
+        out.intro ??= { section_id: str(c.section_id), goal: str(c.goal), reading: strArray(c.reading), timing: str(c.timing), exercise_timing: str(c.exercise_timing), welcome: c.kind === "welcome" };
         break;
       case "guided_page":
         if (str(c.title) || str(c.body)) out.pages.push({ page_id: str(c.page_id) || `page-${out.pages.length + 1}`, title: str(c.title), body: str(c.body) });
@@ -84,8 +86,17 @@ export type Screen =
   | { kind: "exercise" }
   | { kind: "submit" };
 
+/**
+ * A welcome lesson (intro content.kind === "welcome") is read-only orientation: it has pages and
+ * nothing to answer, so it shows its pages alone, with no opening, questions, practice or submit screen.
+ */
+export function isWelcomeLesson(g: GuidedLesson): boolean {
+  return !!g.intro?.welcome && g.pages.length > 0 && !g.check && g.questions.length === 0 && !g.exercise;
+}
+
 /** The ordered screens: opening, each teaching page, then (only if present) questions, practice, and finally review & submit. */
 export function buildScreens(g: GuidedLesson): Screen[] {
+  if (isWelcomeLesson(g)) return g.pages.map((_, index) => ({ kind: "page" as const, index }));
   const screens: Screen[] = [{ kind: "opening" }];
   g.pages.forEach((_, index) => screens.push({ kind: "page", index }));
   if (g.check || g.questions.length > 0) screens.push({ kind: "questions" });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  arrowDirection, buildScreens, buildSubmissionContent, clampScreen, draftFromSubmission, emptyDraft, isGuidedLesson,
+  arrowDirection, buildScreens, buildSubmissionContent, clampScreen, draftFromSubmission, emptyDraft, isGuidedLesson, isWelcomeLesson,
   minutesLabel, normalizeDraft, parseGuidedLesson, prettyRange, studentCanEdit, toParagraphs, validateForSubmit, type RawBlock
 } from "@/lib/guided-lesson";
 
@@ -128,5 +128,26 @@ describe("text helpers", () => {
   });
   it("splits paragraphs on blank lines and keeps single line breaks", () => {
     expect(toParagraphs("One\nstill one\n\nTwo\n \nThree")).toEqual(["One\nstill one", "Two", "Three"]);
+  });
+});
+
+describe("welcome lessons", () => {
+  const welcomeBlocks: RawBlock[] = [
+    { block_type: "guided_intro", order_index: 0, content: { kind: "welcome", section_id: "welcome", goal: "", reading: [], timing: "", exercise_timing: "" } },
+    { block_type: "guided_page", order_index: 1, content: { page_id: "page-1", title: "Welcome A", body: "Body A" } },
+    { block_type: "guided_page", order_index: 2, content: { page_id: "page-2", title: "Welcome B", body: "Body B" } }
+  ];
+  it("shows only its pages: no opening, questions, practice or submit", () => {
+    const g = parseGuidedLesson(welcomeBlocks);
+    expect(isWelcomeLesson(g)).toBe(true);
+    expect(buildScreens(g).map((x) => x.kind)).toEqual(["page", "page"]);
+  });
+  it("is not a welcome lesson when it has anything to answer", () => {
+    const g = parseGuidedLesson([...welcomeBlocks, { block_type: "guided_question", order_index: 3, content: { question_id: "q1", prompt: "Q?" } }]);
+    expect(isWelcomeLesson(g)).toBe(false);
+    expect(buildScreens(g)[0].kind).toBe("opening");
+  });
+  it("ordinary lessons are never welcome lessons", () => {
+    expect(isWelcomeLesson(parseGuidedLesson(blocks))).toBe(false);
   });
 });
