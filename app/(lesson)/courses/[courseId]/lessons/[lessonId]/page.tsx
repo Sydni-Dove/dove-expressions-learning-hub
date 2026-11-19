@@ -5,6 +5,8 @@ import { getCourseSettings, canAccessCourse } from "@/lib/course-access";
 import { orderPublishedLessons, computeLessonNeighbors } from "@/lib/lesson-nav";
 import CourseLocked from "@/components/CourseLocked";
 import LessonExperience from "@/components/lesson/LessonExperience";
+import GuidedLessonFlow from "@/components/guided/GuidedLessonFlow";
+import { isGuidedLesson, parseGuidedLesson, type SubmissionStatus } from "@/lib/guided-lesson";
 import LessonReflectionForm from "@/components/LessonReflectionForm";
 import MarkCompleteButton from "@/components/MarkCompleteButton";
 import { resolveStorageContent } from "@/lib/storage";
@@ -24,7 +26,7 @@ export default async function LessonPage({ params }: { params: { courseId: strin
 
   const { data: lesson } = await supabase
     .from("dp_lessons")
-    .select("id,title,subtitle,estimated_duration_minutes,module_id,order_index,status")
+    .select("id,title,subtitle,estimated_duration_minutes,module_id,order_index,status,content_version")
     .eq("id", params.lessonId)
     .maybeSingle();
   if (!lesson) notFound();
@@ -76,6 +78,52 @@ export default async function LessonPage({ params }: { params: { courseId: strin
   const courseProgressPercent = Math.round((completedCount / totalLessons) * 100);
 
   const isComplete = progress?.status === "completed";
+
+  // Guided lessons (one screen at a time) have their own experience. Every other lesson is unchanged.
+  if (isGuidedLesson(blocks)) {
+    const { data: assignmentRows } = await supabase
+      .from("dp_assignments")
+      .select("id")
+      .eq("lesson_id", lesson.id)
+      .is("assigned_to_user_id", null)
+      .is("assigned_to_cohort_id", null)
+      .eq("assignment_type", "reflection")
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const assignmentId = assignmentRows?.[0]?.id ?? null;
+    const { data: submission } = assignmentId
+      ? await supabase.from("dp_submissions").select("id,status,content").eq("assignment_id", assignmentId).eq("student_id", user!.id).maybeSingle()
+      : { data: null };
+    const [{ data: feedback }, { data: draftRow }, { data: resources }] = await Promise.all([
+      submission
+        ? supabase.from("dp_feedback").select("id,content,created_at").eq("submission_id", submission.id).eq("is_private", false).order("created_at", { ascending: true })
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.from("dp_lesson_drafts").select("content").eq("user_id", user!.id).eq("lesson_id", lesson.id).maybeSingle(),
+      supabase.from("dp_course_resources").select("id,title,kind,file_name,version").eq("course_id", course.id).eq("is_active", true).order("kind", { ascending: true }).order("created_at", { ascending: true })
+    ]);
+    return (
+      <GuidedLessonFlow
+        lessonId={lesson.id}
+        lessonTitle={lesson.title}
+        lessonStatus={lesson.status}
+        contentVersion={lesson.content_version ?? 1}
+        courseId={course.id}
+        courseTitle={course.title}
+        guided={parseGuidedLesson(blocks)}
+        userId={user!.id}
+        initialDraft={draftRow?.content ?? null}
+        assignmentId={assignmentId}
+        submission={submission ? { id: submission.id, status: submission.status as SubmissionStatus, content: submission.content } : null}
+        feedback={(feedback ?? []) as any[]}
+        resources={(resources ?? []) as any[]}
+        isStaffPreview={isStaff}
+        position={{ index: lessonPosition, total: totalLessons }}
+        nextLessonId={neighbors.nextId}
+        prevLessonId={neighbors.previousId}
+        lessonCompleted={isComplete}
+      />
+    );
+  }
   const statusLabel = isComplete ? "Teaching complete" : progress?.status === "in_progress" ? "In progress" : "Not started";
   const durationLabel = lesson.estimated_duration_minutes ? `${lesson.estimated_duration_minutes} min` : null;
   const reflectionStarted = !!reflection && Object.entries(reflection).some(([k, v]) => typeof v === "string" && !["id", "lesson_id", "student_id"].includes(k) && v.trim().length > 0);
