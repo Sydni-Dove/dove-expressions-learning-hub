@@ -19,10 +19,13 @@ export default async function LessonBuilderPage({ params }: { params: { courseId
     return <EmptyState title="Not available" body="This lesson doesn't exist, or you don't have an assigned relationship to it." />;
   }
 
-  const [{ data: blocks }, { data: assignments }] = await Promise.all([
+  const [{ data: blocks }, { data: assignments }, { data: keyRows }] = await Promise.all([
     supabase.from("dp_lesson_blocks").select("id,block_type,order_index,content").eq("lesson_id", lessonId).order("order_index"),
-    supabase.from("dp_assignments").select("id,title,assignment_type,due_at").eq("lesson_id", lessonId).order("created_at", { ascending: false })
+    supabase.from("dp_assignments").select("id,title,assignment_type,due_at").eq("lesson_id", lessonId).order("created_at", { ascending: false }),
+    // staff-only table: row-level security returns nothing to anyone who can't manage this course
+    supabase.from("dp_lesson_answer_keys").select("check_id,correct_index,feedback").eq("lesson_id", lessonId)
   ]);
+  const answerKeys = Object.fromEntries((keyRows ?? []).map((k: any) => [k.check_id, { correct_index: k.correct_index, feedback: k.feedback }]));
 
   return (
     <div className="max-w-3xl space-y-6 pb-16">
@@ -49,7 +52,7 @@ export default async function LessonBuilderPage({ params }: { params: { courseId
       <div>
         <h2 className="font-display text-xl text-burgundy">Content</h2>
         <div className="mt-3">
-          <LessonBlockEditor lessonId={lesson.id} blocks={blocks ?? []} />
+          <LessonBlockEditor lessonId={lesson.id} blocks={blocks ?? []} answerKeys={answerKeys} />
         </div>
       </div>
 

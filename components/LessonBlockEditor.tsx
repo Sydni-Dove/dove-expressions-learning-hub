@@ -29,6 +29,11 @@ const TYPE_LABEL: Record<string, string> = {
   resources: "Resources",
   do_this_now: "Do This Now (practical action)",
   prompt_card: "Copyable prompt",
+  guided_intro: "Guided lesson — opening (goal, reading, timing)",
+  guided_page: "Guided lesson — teaching page",
+  guided_check: "Guided lesson — knowledge check",
+  guided_question: "Guided lesson — reflection question",
+  guided_exercise: "Guided lesson — practice exercise",
   video: "Video (link only)"
 };
 
@@ -48,6 +53,11 @@ const TYPE_ORDER = [
   "resources",
   "do_this_now",
   "prompt_card",
+  "guided_intro",
+  "guided_page",
+  "guided_check",
+  "guided_question",
+  "guided_exercise",
   "scripture",
   "video"
 ];
@@ -112,6 +122,16 @@ function defaultContent(type: string): Record<string, any> {
       return { title: "Do this now", instruction: "", items: [] };
     case "prompt_card":
       return { label: "", prompt: "" };
+    case "guided_intro":
+      return { section_id: "", goal: "", reading: [], timing: "", exercise_timing: "" };
+    case "guided_page":
+      return { page_id: "", title: "", body: "" };
+    case "guided_check":
+      return { check_id: "check", prompt: "", options: ["", "", ""] };
+    case "guided_question":
+      return { question_id: "", type: "reflection", prompt: "" };
+    case "guided_exercise":
+      return { title: "", minutes: "", steps: [], response_prompt: "" };
     default:
       return {};
   }
@@ -159,6 +179,16 @@ function BlockSummary({ block }: { block: Block }) {
       return <p className="font-body text-sm text-charcoal/80">{c.title || "Do this now"} — {c.instruction ? c.instruction : muted("no instruction yet")}</p>;
     case "prompt_card":
       return <p className="font-body text-sm text-charcoal/80">{c.label ? `${c.label} — ` : ""}{c.prompt ? String(c.prompt).slice(0, 120) : muted("No prompt yet")}</p>;
+    case "guided_intro":
+      return <p className="font-body text-sm text-charcoal/80">{c.goal ? c.goal : muted("No learning goal yet")} — {(c.reading?.length ?? 0)} reading(s)</p>;
+    case "guided_page":
+      return <p className="font-body text-sm text-charcoal/80"><strong>{c.title || "Untitled page"}</strong> — {c.body ? String(c.body).slice(0, 110) : muted("no text yet")}</p>;
+    case "guided_check":
+      return <p className="font-body text-sm text-charcoal/80">{c.prompt || muted("No question yet")} — {(c.options?.length ?? 0)} option(s) · answer key {muted("is set under Edit")}</p>;
+    case "guided_question":
+      return <p className="font-body text-sm text-charcoal/80">{c.question_id ? `${c.question_id}: ` : ""}{c.prompt || muted("No question yet")}</p>;
+    case "guided_exercise":
+      return <p className="font-body text-sm text-charcoal/80"><strong>{c.title || "Practice"}</strong> — {(c.steps?.length ?? 0)} step(s){c.minutes ? ` · ${c.minutes} min` : ""}</p>;
     default:
       return <p className="font-body text-sm text-charcoal/50">{JSON.stringify(c)}</p>;
   }
@@ -359,6 +389,69 @@ function BlockForm({
     );
   }
 
+  if (type === "guided_intro") {
+    return (
+      <>
+        <div>
+          <label className="field-label">Learning goal</label>
+          <textarea value={value.goal || ""} onChange={(e) => set({ goal: e.target.value })} rows={2} className="w-full input" />
+        </div>
+        <div>
+          <label className="field-label">Core Scripture reading — one reference per line</label>
+          <textarea defaultValue={(value.reading || []).join("\n")} onChange={(e) => set({ reading: linesToItems(e.target.value) })} rows={3} className="w-full input" />
+        </div>
+        <input value={value.timing || ""} onChange={(e) => set({ timing: e.target.value })} placeholder="Teaching time estimate, e.g. 5-10 including reading and pauses" className="w-full input" />
+        <input value={value.exercise_timing || ""} onChange={(e) => set({ exercise_timing: e.target.value })} placeholder="Practice time estimate, e.g. 10-25" className="w-full input" />
+        <p className="font-ui text-xs text-charcoal/50">Timing is an estimate. Students are never told a fixed time per page.</p>
+      </>
+    );
+  }
+
+  if (type === "guided_page") {
+    return (
+      <>
+        <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Page title" className="w-full input" />
+        <textarea value={value.body || ""} onChange={(e) => set({ body: e.target.value })} placeholder="Page text — separate paragraphs with a blank line" rows={12} className="w-full input" />
+        <p className="font-ui text-xs text-charcoal/50">Shown to students as one screen. Move pages up or down in the list to change their order.</p>
+      </>
+    );
+  }
+
+  if (type === "guided_check") {
+    return (
+      <>
+        <textarea value={value.prompt || ""} onChange={(e) => set({ prompt: e.target.value })} placeholder="Knowledge check question" rows={2} className="w-full input" />
+        <div>
+          <label className="field-label">Answer options — one per line (the correct answer is set in the staff-only answer key below)</label>
+          <textarea defaultValue={(value.options || []).join("\n")} onChange={(e) => set({ options: linesToItems(e.target.value) })} rows={4} className="w-full input" />
+        </div>
+      </>
+    );
+  }
+
+  if (type === "guided_question") {
+    return (
+      <>
+        <textarea value={value.prompt || ""} onChange={(e) => set({ prompt: e.target.value })} placeholder="Reflection question (students write a free response)" rows={3} className="w-full input" />
+        {value.question_id ? <p className="font-ui text-xs text-charcoal/50">Question ID: <code>{value.question_id}</code> — kept stable so earlier student answers stay matched. Don't reuse an ID for a different question.</p> : null}
+      </>
+    );
+  }
+
+  if (type === "guided_exercise") {
+    return (
+      <>
+        <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Exercise title" className="w-full input" />
+        <input value={value.minutes || ""} onChange={(e) => set({ minutes: e.target.value })} placeholder="Time estimate, e.g. 15-20" className="w-full input" />
+        <div>
+          <label className="field-label">Steps — one per line</label>
+          <textarea defaultValue={(value.steps || []).join("\n")} onChange={(e) => set({ steps: linesToItems(e.target.value) })} rows={5} className="w-full input" />
+        </div>
+        <textarea value={value.response_prompt || ""} onChange={(e) => set({ response_prompt: e.target.value })} placeholder="What the student should record in the response box" rows={2} className="w-full input" />
+      </>
+    );
+  }
+
   if (type === "teaching_section") {
     return (
       <>
@@ -423,16 +516,98 @@ function validate(type: string, content: Record<string, any>): string | null {
   if (type === "do_this_now" && !(content.instruction || "").trim() && (content.items || []).length === 0) return "Add an instruction or at least one checklist item.";
   if (type === "prompt_card" && !(content.prompt || "").trim()) return "Add the prompt text.";
   if (type === "video" && !(content.url || "").trim()) return "Add the video link.";
+  if (type === "guided_page" && (!(content.title || "").trim() || !(content.body || "").trim())) return "Add a page title and the page text.";
+  if (type === "guided_check") {
+    if (!(content.prompt || "").trim()) return "Add the knowledge check question.";
+    if ((content.options || []).filter((o: string) => (o || "").trim()).length < 2) return "Add at least two answer options.";
+  }
+  if (type === "guided_question" && !(content.prompt || "").trim()) return "Add the reflection question.";
+  if (type === "guided_exercise" && (!(content.title || "").trim() || (content.steps || []).length === 0)) return "Add an exercise title and at least one step.";
+  if (type === "guided_intro" && !(content.goal || "").trim()) return "Add the learning goal.";
   if (type === "teaching_section" && (!(content.heading || "").trim() || (content.paragraphs || []).length === 0)) return "Add a heading and at least one paragraph.";
   return null;
 }
 
+/** One-per-lesson guided pieces, and stable IDs for pages/questions so submissions keep matching their prompts. */
+const ONE_PER_LESSON = ["guided_intro", "guided_check", "guided_exercise"];
+function withGuidedIds(type: string, content: Record<string, any>, existing: Block[]): Record<string, any> {
+  if (type === "guided_page" && !content.page_id) {
+    const used = new Set(existing.filter((b) => b.block_type === "guided_page").map((b) => b.content?.page_id));
+    let n = used.size + 1;
+    while (used.has(`page-${n}`)) n++;
+    return { ...content, page_id: `page-${n}` };
+  }
+  if (type === "guided_question" && !content.question_id) {
+    const used = new Set(existing.filter((b) => b.block_type === "guided_question").map((b) => b.content?.question_id));
+    let n = used.size + 1;
+    while (used.has(`q${n}`)) n++;
+    return { ...content, question_id: `q${n}` };
+  }
+  return content;
+}
+
 function normalize(type: string, content: Record<string, any>): Record<string, any> {
+  if (type === "guided_check") return { ...content, options: (content.options || []).map((o: string) => (o || "").trim()).filter(Boolean) };
   if (type === "video") return { url: (content.url || "").trim(), provider: detectProvider((content.url || "").trim()) };
   return content;
 }
 
-export default function LessonBlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Block[] }) {
+export type AnswerKeys = Record<string, { correct_index: number; feedback: string }>;
+
+/** Staff-only: which option is correct and the feedback shown after a student answers. Never sent to students. */
+function AnswerKeyEditor({ lessonId, checkId, options, initial }: { lessonId: string; checkId: string; options: string[]; initial?: { correct_index: number; feedback: string } }) {
+  const supabase = createClient();
+  const [correct, setCorrect] = useState<number>(initial?.correct_index ?? 0);
+  const [feedback, setFeedback] = useState(initial?.feedback ?? "");
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const clean = options.filter((o) => (o || "").trim());
+
+  async function saveKey() {
+    if (correct < 0 || correct >= clean.length) {
+      setState("error");
+      setMessage("Choose which option is correct.");
+      return;
+    }
+    setState("saving");
+    const { error } = await supabase
+      .from("dp_lesson_answer_keys")
+      .upsert({ lesson_id: lessonId, check_id: checkId, correct_index: correct, feedback, updated_at: new Date().toISOString() }, { onConflict: "lesson_id,check_id" });
+    if (error) {
+      setState("error");
+      setMessage(error.message);
+      return;
+    }
+    setState("saved");
+    setMessage(null);
+  }
+
+  return (
+    <div className="rounded-card border border-sunrise/40 bg-sunrise/5 p-4" data-testid="answer-key-editor">
+      <p className="font-ui text-xs font-bold uppercase tracking-[0.14em] text-sunrise-dark">Answer key — staff only</p>
+      <p className="mt-1 font-ui text-xs text-charcoal/60">Students never receive this. They see the result and feedback only after they choose an answer. Save it separately from the question.</p>
+      <fieldset className="mt-3 space-y-1">
+        <legend className="field-label">Correct answer</legend>
+        {clean.map((o, i) => (
+          <label key={i} className="flex items-start gap-2 font-body text-sm">
+            <input type="radio" name={`key-${checkId}`} checked={correct === i} onChange={() => { setCorrect(i); setState("idle"); }} className="mt-1" />
+            <span>{o}</span>
+          </label>
+        ))}
+        {clean.length === 0 && <p className="font-ui text-xs text-charcoal/50">Add the answer options above first.</p>}
+      </fieldset>
+      <label className="field-label mt-3 block">Feedback shown after answering</label>
+      <textarea value={feedback} onChange={(e) => { setFeedback(e.target.value); setState("idle"); }} rows={3} className="w-full input" />
+      <div className="mt-2 flex items-center gap-3">
+        <button type="button" onClick={saveKey} disabled={state === "saving"} className="btn-secondary">{state === "saving" ? "Saving…" : "Save answer key"}</button>
+        {state === "saved" && <span role="status" className="font-ui text-xs text-green-700">Answer key saved.</span>}
+        {state === "error" && message && <span role="alert" className="font-ui text-xs text-[#7a2c1c]">{message}</span>}
+      </div>
+    </div>
+  );
+}
+
+export default function LessonBlockEditor({ lessonId, blocks, answerKeys = {} }: { lessonId: string; blocks: Block[]; answerKeys?: AnswerKeys }) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -453,6 +628,10 @@ export default function LessonBlockEditor({ lessonId, blocks }: { lessonId: stri
   }
 
   async function addBlock() {
+    if (ONE_PER_LESSON.includes(newType) && blocks.some((b) => b.block_type === newType)) {
+      setError("This lesson already has one of those. Edit the existing one instead.");
+      return;
+    }
     const err = validate(newType, addDraft);
     if (err) {
       setError(err);
@@ -464,7 +643,7 @@ export default function LessonBlockEditor({ lessonId, blocks }: { lessonId: stri
       lesson_id: lessonId,
       block_type: newType,
       order_index: blocks.length,
-      content: normalize(newType, addDraft)
+      content: withGuidedIds(newType, normalize(newType, addDraft), blocks)
     });
     setSaving(false);
     if (insertError) {
@@ -548,6 +727,9 @@ export default function LessonBlockEditor({ lessonId, blocks }: { lessonId: stri
             {editingId === b.id && (
               <div className="mt-4 space-y-3 border-t border-charcoal/10 pt-4">
                 <BlockForm type={b.block_type} value={editDraft} onChange={setEditDraft} lessonId={lessonId} />
+                {b.block_type === "guided_check" && (
+                  <AnswerKeyEditor lessonId={lessonId} checkId={String(b.content?.check_id || "check")} options={editDraft.options || []} initial={answerKeys[String(b.content?.check_id || "check")]} />
+                )}
                 {editError && <p role="alert" className="rounded-lg bg-coral/10 px-3 py-2 font-ui text-sm text-[#7a2c1c]">{editError}</p>}
                 <div className="flex gap-2">
                   <button onClick={() => saveEdit(b)} disabled={busyId === b.id} className="btn-primary">{busyId === b.id ? "Saving…" : "Save changes"}</button>

@@ -14,7 +14,7 @@ export default async function StaffDashboardPage() {
     supabase
       .from("dp_submissions")
       .select("id,student_id,assignment_id,status,submitted_at,dp_assignments(title)")
-      .eq("status", "submitted")
+      .in("status", ["submitted", "revised"])
       .order("submitted_at", { ascending: false })
       .limit(8),
     supabase.from("dp_live_sessions").select("id,title,starts_at").gte("starts_at", new Date().toISOString()).order("starts_at").limit(5),
