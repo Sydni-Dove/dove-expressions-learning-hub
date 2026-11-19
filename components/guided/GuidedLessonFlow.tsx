@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import RichBody from "./RichBody";
 import {
   MAX_EXERCISE_CHARS,
   MAX_REFLECTION_CHARS,
@@ -12,11 +13,13 @@ import {
   buildSubmissionContent,
   clampScreen,
   draftFromSubmission,
+  isSequenced,
   isWelcomeLesson,
   minutesLabel,
   normalizeDraft,
+  responseGroups,
+  screenInfo,
   studentCanEdit,
-  toParagraphs,
   validateForSubmit,
   type GuidedDraft,
   type GuidedLesson,
@@ -68,6 +71,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
   const supabase = useMemo(() => createClient(), []);
   const screens = useMemo(() => buildScreens(guided), [guided]);
   const welcome = isWelcomeLesson(guided);
+  const sequenced = isSequenced(guided);
 
   // Reflect a successful submit immediately; the server data (props) takes over after the refresh.
   const [localStatus, setLocalStatus] = useState<SubmissionStatus | null>(null);
@@ -81,7 +85,11 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
     if (submission && (locked || !props.initialDraft)) return draftFromSubmission(submission.content, contentVersion);
     return normalizeDraft(props.initialDraft, contentVersion);
   });
-  const [screenIndex, setScreenIndex] = useState(() => clampScreen(locked ? 0 : normalizeDraft(props.initialDraft, contentVersion).screen, screens.length));
+  // A saved place only means something in the structure it was saved under: after the lesson is updated, start again at the first screen (answers are kept).
+  const [screenIndex, setScreenIndex] = useState(() => {
+    const saved = normalizeDraft(props.initialDraft, contentVersion);
+    return clampScreen(locked || saved.contentVersion !== contentVersion ? 0 : saved.screen, screens.length);
+  });
   const [save, setSave] = useState<SaveState>({ kind: "saved", at: null });
   const [checkResult, setCheckResult] = useState<{ choice: number; correct: boolean; feedback: string } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -157,9 +165,9 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
       }
       window.scrollTo({ top: 0 });
       const s = screens[next];
-      setAnnounce(s.kind === "page" ? `Page ${s.index + 1} of ${pageCount}: ${guided.pages[s.index]?.title ?? ""}` : s.kind === "opening" ? "Lesson opening" : s.kind === "questions" ? "Questions" : s.kind === "exercise" ? "Practice" : "Review and submit");
+      setAnnounce(sequenced ? `Step ${next + 1} of ${screens.length}: ${screenInfo(guided, s).label}` : s.kind === "page" ? `Page ${s.index + 1} of ${pageCount}: ${guided.pages[s.index]?.title ?? ""}` : screenInfo(guided, s).label);
     },
-    [guided.pages, locked, pageCount, scheduleSave, screens]
+    [guided, locked, pageCount, scheduleSave, screens, sequenced]
   );
   const goTo = useCallback((i: number) => go(clampScreen(i, screens.length) - screenRef.current), [go, screens.length]);
 
@@ -257,7 +265,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
 
   const isFirst = screenIndex === 0;
   const isLast = screenIndex === screens.length - 1;
-  const nextLabel = screen.kind === "opening" ? "Start" : screen.kind === "page" && screen.index === pageCount - 1 ? (guided.check || guided.questions.length ? "Go to questions" : "Next") : "Next";
+  const nextLabel = sequenced ? "Next" : screen.kind === "opening" ? "Start" : screen.kind === "page" && screen.index === pageCount - 1 ? (guided.check || guided.questions.length ? "Go to questions" : "Next") : "Next";
 
   const workbook = resources.length > 0 && (
     <aside className="card p-4 sm:p-5" aria-labelledby="workbook-heading" data-testid="workbook-card">
@@ -284,7 +292,20 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
           <Link href={`/courses/${courseId}`} className="inline-flex min-h-[44px] items-center font-ui text-sm text-charcoal/60 underline">← {courseTitle}</Link>
           <span className="font-ui text-xs uppercase tracking-wide text-charcoal/50">{welcome ? "Start here" : `Section ${position.index} of ${position.total}`}</span>
         </div>
-        {!welcome && <ol className="mt-3 flex gap-1.5" aria-label="Lesson steps">
+        {!welcome && sequenced && (
+          <div className="mt-3" data-testid="sequence-progress">
+            <p className="font-ui text-sm font-bold text-burgundy" aria-live="off">
+              <span data-testid="step-counter">Step {screenIndex + 1} of {screens.length}</span>
+              <span className="font-normal text-charcoal/70"> · {screenInfo(guided, screen).label}</span>
+            </p>
+            <div className="mt-2 flex gap-1" aria-hidden="true">
+              {screens.map((s, i) => (
+                <span key={i} className={`h-1.5 flex-1 rounded-pill ${i === screenIndex ? "bg-burgundy" : i < screenIndex ? "bg-burgundy/50" : "bg-burgundy/15"}`} />
+              ))}
+            </div>
+          </div>
+        )}
+        {!welcome && !sequenced && <ol className="mt-3 flex gap-1.5" aria-label="Lesson steps">
           {stepNames.map((n) => (
             <li key={n} aria-current={n === currentStep ? "step" : undefined} className={`flex-1 rounded-pill px-2 py-1 text-center font-ui text-[0.68rem] font-bold uppercase tracking-wide ${n === currentStep ? "bg-burgundy text-soft" : "bg-burgundy/10 text-burgundy/60"}`}>
               {n}
@@ -353,16 +374,66 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
 
         {screen.kind === "page" && (
           <section aria-labelledby="screen-title" data-testid="screen-page">
-            <p className="font-ui text-xs font-bold uppercase tracking-[0.18em] text-sunrise-dark" data-testid="page-counter">Page {screen.index + 1} of {pageCount}</p>
+            <p className="font-ui text-xs font-bold uppercase tracking-[0.18em] text-sunrise-dark" data-testid="page-counter">{sequenced ? `Teaching page ${screen.index + 1} of ${pageCount}` : `Page ${screen.index + 1} of ${pageCount}`}</p>
             <h1 id="screen-title" ref={headingRef} tabIndex={-1} className="mt-1 font-display text-2xl leading-tight text-burgundy outline-none sm:text-3xl">{guided.pages[screen.index].title}</h1>
-            <div className="mt-4 space-y-4 font-body text-[1.08rem] leading-relaxed text-charcoal/90" data-testid="page-body">
-              {toParagraphs(guided.pages[screen.index].body).map((p, i) => (
-                <p key={i} className="whitespace-pre-line">{p}</p>
-              ))}
-            </div>
+            <div className="mt-4"><RichBody body={guided.pages[screen.index].body} testId="page-body" /></div>
             {welcome && isLast && <div className="mt-6">{workbook}</div>}
           </section>
         )}
+
+        {screen.kind === "responses" && (() => {
+          const def = guided.screens.find((x) => x.screen_id === screen.id);
+          if (!def) return null;
+          const pageStep = def.for_page ? screens.findIndex((x) => x.kind === "page" && guided.pages[x.index]?.page_id === def.for_page) : -1;
+          let n = 0;
+          return (
+            <section aria-labelledby="screen-title" data-testid="screen-responses">
+              <p className="font-ui text-xs font-bold uppercase tracking-[0.18em] text-sunrise-dark">{def.label}</p>
+              <h1 id="screen-title" ref={headingRef} tabIndex={-1} className="mt-1 font-display text-2xl leading-tight text-burgundy outline-none sm:text-3xl">{def.title}</h1>
+              <p className="mt-2 font-body text-sm text-charcoal/70">Your answers save as a private draft. You can go back to the teaching at any time without losing them.</p>
+              {pageStep >= 0 && <button type="button" onClick={() => goTo(pageStep)} className="mt-1 inline-flex min-h-[44px] items-center font-ui text-sm text-burgundy underline" data-testid="back-to-teaching">Review this teaching page</button>}
+              <div className="mt-4 space-y-5">
+                {def.items.map((item, idx) => {
+                  if (item.kind === "note") {
+                    return (
+                      <div key={`n${idx}`} className="rounded-card border border-gold/40 bg-gold/10 p-4" data-testid="screen-note">
+                        {item.title && <h2 className="font-display text-xl text-burgundy">{item.title}</h2>}
+                        {item.body && <div className={item.title ? "mt-2" : ""}><RichBody body={item.body} /></div>}
+                      </div>
+                    );
+                  }
+                  const q = guided.questions.find((x) => x.question_id === item.question_id);
+                  if (!q) return null;
+                  const isField = q.type === "field";
+                  if (!isField) n += 1;
+                  const id = `q-${q.question_id}`;
+                  const value = draft.answers[q.question_id] ?? "";
+                  return (
+                    <div key={q.question_id} data-testid="response-question">
+                      <label htmlFor={id} className="block font-body text-base font-semibold text-charcoal">
+                        <span className="mr-1 font-ui text-xs font-bold uppercase tracking-wide text-sunrise-dark">{isField ? "Your response" : `Question ${n}`}</span>
+                        <span className="block">{q.prompt}</span>
+                      </label>
+                      <textarea
+                        id={id}
+                        value={value}
+                        readOnly={locked}
+                        maxLength={MAX_REFLECTION_CHARS}
+                        rows={5}
+                        onChange={(e) => setAnswer(q.question_id, e.target.value)}
+                        onBlur={() => dirtyRef.current && void persist()}
+                        className="input mt-2 w-full"
+                        aria-describedby={`${id}-count`}
+                      />
+                      <p id={`${id}-count`} className="mt-1 text-right font-ui text-xs text-charcoal/45">{value.length} / {MAX_REFLECTION_CHARS}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 font-ui text-xs text-charcoal/55">These are personal responses — they aren't graded automatically. Your instructor reads them when you submit.</p>
+            </section>
+          );
+        })()}
 
         {screen.kind === "questions" && (
           <section aria-labelledby="screen-title" data-testid="screen-questions">
@@ -467,11 +538,38 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
           <section aria-labelledby="screen-title" data-testid="screen-submit">
             <h1 id="screen-title" ref={headingRef} tabIndex={-1} className="font-display text-2xl text-burgundy outline-none sm:text-3xl">Review &amp; submit</h1>
             <p className="mt-2 font-body text-base text-charcoal/80">Reading to the end doesn't complete this section. When you submit, your answers go to your instructor, who reviews them and records completion.</p>
-            <ul className="mt-4 space-y-2 font-ui text-sm" data-testid="requirements">
-              {guided.check && <Req ok={draft.check.choice !== null} label="Knowledge check answered" />}
-              {guided.questions.map((q, i) => <Req key={q.question_id} ok={!!(draft.answers[q.question_id] ?? "").trim()} label={`Reflection ${i + 1} answered`} />)}
-              {guided.exercise && <Req ok={!!draft.exercise.trim()} label="Practice response written" />}
-            </ul>
+            {sequenced ? (
+              <div className="mt-4 space-y-4" data-testid="review-groups">
+                {responseGroups(guided).map((grp) => {
+                  const at = screens.findIndex((x) => x.kind === "responses" && x.id === grp.screen_id);
+                  return (
+                    <section key={grp.screen_id} className="card p-4" aria-labelledby={`rg-${grp.screen_id}`} data-testid="review-group">
+                      <div className="flex items-start justify-between gap-3">
+                        <h2 id={`rg-${grp.screen_id}`} className="font-display text-lg text-burgundy">{grp.title}</h2>
+                        {!locked && at >= 0 && <button type="button" className="btn-secondary shrink-0" onClick={() => goTo(at)} aria-label={`Edit your responses for ${grp.title}`}>Edit</button>}
+                      </div>
+                      <ol className="mt-3 space-y-3">
+                        {grp.questions.map((q, i) => {
+                          const a = (draft.answers[q.question_id] ?? "").trim();
+                          return (
+                            <li key={q.question_id} data-testid="review-answer">
+                              <p className="font-body text-sm font-semibold text-charcoal">{i + 1}. {q.prompt}</p>
+                              {a ? <p className="mt-1 whitespace-pre-wrap rounded-control bg-charcoal/[0.04] p-2 font-body text-sm text-charcoal/85">{a}</p> : <p className="mt-1 font-ui text-sm text-[#7a2c1c]">Not answered yet<span className="sr-only"> — needs an answer before you can submit</span></p>}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <ul className="mt-4 space-y-2 font-ui text-sm" data-testid="requirements">
+                {guided.check && <Req ok={draft.check.choice !== null} label="Knowledge check answered" />}
+                {guided.questions.map((q, i) => <Req key={q.question_id} ok={!!(draft.answers[q.question_id] ?? "").trim()} label={`Reflection ${i + 1} answered`} />)}
+                {guided.exercise && <Req ok={!!draft.exercise.trim()} label="Practice response written" />}
+              </ul>
+            )}
 
             {locked ? (
               <p className="mt-5 font-body text-sm text-charcoal/70">You've already submitted this section. {status === "submitted" || status === "revised" ? "You'll be able to revise it if your instructor returns it." : ""}</p>
@@ -510,7 +608,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 sm:px-6">
           <button type="button" className="btn-secondary" onClick={() => go(-1)} disabled={isFirst} aria-label="Back to the previous screen" data-testid="back">← Back</button>
           <div className="min-w-0 flex-1 text-center" role="status" aria-live="polite">
-            {!locked && (screen.kind === "questions" || screen.kind === "exercise" || screen.kind === "submit") ? (
+            {!locked && (screen.kind === "questions" || screen.kind === "exercise" || screen.kind === "responses" || screen.kind === "submit") ? (
               <span className={`font-ui text-xs ${save.kind === "error" ? "font-bold text-[#7a2c1c]" : "text-charcoal/55"}`} data-testid="save-status" data-state={save.kind}>
                 {saveLabel}
                 {save.kind === "error" && (
@@ -518,7 +616,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
                 )}
               </span>
             ) : (
-              <span className="font-ui text-xs text-charcoal/55">{screen.kind === "page" ? `Page ${screen.index + 1} of ${pageCount}` : ""}</span>
+              <span className="font-ui text-xs text-charcoal/55">{screen.kind === "page" ? (sequenced ? `Teaching page ${screen.index + 1} of ${pageCount}` : `Page ${screen.index + 1} of ${pageCount}`) : ""}</span>
             )}
           </div>
           {!isLast ? (

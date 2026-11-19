@@ -255,3 +255,76 @@ describe("course resources (private workbook downloads)", () => {
     await expect(db.query("insert into dp_course_resources(course_id,title,storage_path) values ($1,'x','lessons/../etc.pdf')", [courseId])).rejects.toThrow(/dp_course_resources_path/);
   });
 });
+
+describe("sequenced sections (dp_replace_guided_section)", () => {
+  const seq = (over: any = {}) => ({
+    opening: false,
+    steps: [
+      { kind: "page", id: "p1", title: "Synthetic page one", body: "Synthetic body one." },
+      { kind: "responses", id: "s1", label: "Questions", title: "Synthetic page one", forPage: "p1", items: [{ kind: "question", id: "n1-q1", prompt: "Synthetic question A?" }, { kind: "question", id: "n1-q2", prompt: "Synthetic question B?" }] },
+      { kind: "page", id: "p2", title: "Synthetic page two", body: "Synthetic body two." },
+      { kind: "responses", id: "s2", label: "Questions and Exercise", title: "Synthetic page two", forPage: "p2", items: [{ kind: "question", id: "n2-q1", prompt: "Synthetic question C?" }, { kind: "note", title: "Synthetic exercise", body: "Synthetic instructions." }, { kind: "question", id: "n2-q2", prompt: "Synthetic question D?" }] },
+      { kind: "responses", id: "s3", label: "Exercise", title: "Synthetic standalone", forPage: "", items: [{ kind: "question", id: "n3-q1", prompt: "Synthetic question E?" }] }
+    ],
+    ...over
+  });
+  const replace = (uid: string | null, lessonId: string, section: any, note = "synthetic test") =>
+    asUser<any>(db, uid, "select dp_replace_guided_section($1::uuid, $2::jsonb, $3) r", [lessonId, JSON.stringify(section), note]);
+
+  it("is refused for a student, an outsider and a signed-out caller; nothing changes", async () => {
+    const before = (await db.query<any>("select content_version from dp_lessons where id=$1", [lessons[1].id])).rows[0].content_version;
+    for (const uid of [STUDENT, OUTSIDER]) await expect(replace(uid, lessons[1].id, seq())).rejects.toThrow(/not authorized|not found/i); // a draft lesson is invisible to them
+    await expect(replace(null, lessons[1].id, seq())).rejects.toThrow();
+    expect((await db.query<any>("select content_version from dp_lessons where id=$1", [lessons[1].id])).rows[0].content_version).toBe(before);
+  });
+
+  it("rejects malformed sections before changing anything", async () => {
+    const before = (await db.query<any>("select count(*)::int n from dp_lesson_blocks where lesson_id=$1", [lessons[1].id])).rows[0].n;
+    const s = seq();
+    const bad = [
+      { steps: [] },
+      { steps: [{ kind: "responses", id: "x", title: "t", items: [{ kind: "question", id: "q", prompt: "p" }] }] }, // no teaching page
+      { steps: [s.steps[0], { ...s.steps[1], forPage: "missing" }] },
+      { steps: [s.steps[0], { ...s.steps[1], items: [{ kind: "note", title: "only a note" }] }] },
+      { steps: [s.steps[0], s.steps[1], { ...s.steps[2] }, { ...s.steps[3], items: [{ kind: "question", id: "n1-q1", prompt: "reused id" }] }] },
+      { steps: [{ ...s.steps[0], body: " " }] },
+      { steps: [{ kind: "mystery" }] }
+    ];
+    for (const b of bad) await expect(replace(ADMIN, lessons[1].id, b)).rejects.toThrow();
+    expect((await db.query<any>("select count(*)::int n from dp_lesson_blocks where lesson_id=$1", [lessons[1].id])).rows[0].n).toBe(before);
+  });
+
+  it("replaces one lesson: new block order, no knowledge check or key, previous version archived, other lessons untouched", async () => {
+    const other = (await db.query<any>("select content_version from dp_lessons where id=$1", [lessons[2].id])).rows[0].content_version;
+    const before = (await db.query<any>("select content_version from dp_lessons where id=$1", [lessons[1].id])).rows[0].content_version;
+    const r = (await replace(ADMIN, lessons[1].id, seq())).rows[0].r;
+    expect(r).toMatchObject({ pages: 2, screens: 3, questions: 5, contentVersion: before + 1 });
+    const blocks = (await db.query<any>("select block_type, content from dp_lesson_blocks where lesson_id=$1 order by order_index", [lessons[1].id])).rows;
+    expect(blocks.map((b: any) => b.block_type)).toEqual([
+      "guided_intro", "guided_page", "guided_screen", "guided_question", "guided_question",
+      "guided_page", "guided_screen", "guided_question", "guided_note", "guided_question", "guided_screen", "guided_question"
+    ]);
+    expect(blocks[0].content.opening).toBe(false);
+    expect(blocks[2].content).toMatchObject({ screen_id: "s1", label: "Questions", for_page: "p1" });
+    expect((await db.query<any>("select count(*)::int n from dp_lesson_answer_keys where lesson_id=$1", [lessons[1].id])).rows[0].n).toBe(0);
+    const snap = (await db.query<any>("select jsonb_array_length(snapshot->'blocks') blocks, jsonb_array_length(snapshot->'answer_keys') keys, note from dp_lesson_versions where lesson_id=$1 and content_version=$2", [lessons[1].id, before])).rows[0];
+    expect(snap.blocks).toBeGreaterThan(5);
+    expect(snap.keys).toBe(1);
+    expect(snap.note).toBe("synthetic test");
+    expect((await db.query<any>("select content_version from dp_lessons where id=$1", [lessons[2].id])).rows[0].content_version).toBe(other);
+    expect((await db.query<any>("select status from dp_lessons where id=$1", [lessons[1].id])).rows[0].status).not.toBe("published");
+  });
+
+  it("keeps existing submissions and the assignment; students still cannot read the draft lesson", async () => {
+    const subsBefore = (await db.query<any>("select count(*)::int n from dp_submissions s join dp_assignments a on a.id=s.assignment_id where a.lesson_id=$1", [lessons[0].id])).rows[0].n;
+    expect(subsBefore).toBe(1);
+    const r = (await replace(ADMIN, lessons[0].id, seq())).rows[0].r;
+    expect(r.existingSubmissionsKept).toBe(1);
+    expect((await db.query<any>("select count(*)::int n from dp_submissions s join dp_assignments a on a.id=s.assignment_id where a.lesson_id=$1", [lessons[0].id])).rows[0].n).toBe(1);
+    expect((await db.query<any>("select count(*)::int n from dp_assignments where lesson_id=$1", [lessons[0].id])).rows[0].n).toBe(1);
+  });
+
+  it("an unpublished sequenced lesson is invisible to an enrolled student", async () => {
+    expect((await asUser<any>(db, OTHER_STUDENT, "select id from dp_lesson_blocks where lesson_id=$1", [lessons[1].id])).rows.length).toBe(0);
+  });
+});

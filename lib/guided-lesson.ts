@@ -8,7 +8,7 @@
  * student has chosen an option.
  */
 
-export const GUIDED_BLOCK_TYPES = ["guided_intro", "guided_page", "guided_check", "guided_question", "guided_exercise"] as const;
+export const GUIDED_BLOCK_TYPES = ["guided_intro", "guided_page", "guided_screen", "guided_note", "guided_check", "guided_question", "guided_exercise"] as const;
 
 export interface RawBlock {
   id?: string;
@@ -25,10 +25,16 @@ export interface GuidedIntro {
   exercise_timing: string;
   /** A "How to use this course" style lesson: teaching pages only, no questions, practice or submit. */
   welcome: boolean;
+  /** false = no separate opening screen; the first screen is the first teaching page. */
+  opening: boolean;
 }
 export interface GuidedPage { page_id: string; title: string; body: string }
 export interface GuidedCheck { check_id: string; prompt: string; options: string[] }
-export interface GuidedQuestion { question_id: string; type: string; prompt: string }
+export interface GuidedQuestion { question_id: string; type: string; prompt: string; /** the response screen this question belongs to (sequenced lessons only) */ screen_id?: string }
+export type ScreenItem = { kind: "question"; question_id: string } | { kind: "note"; title: string; body: string };
+/** A screen of responses that belongs to one teaching page (or stands alone, like an exercise). */
+export interface GuidedResponseScreen { screen_id: string; label: string; title: string; for_page: string; items: ScreenItem[] }
+export type GuidedStep = { kind: "page"; index: number } | { kind: "responses"; screen_id: string };
 export interface GuidedExercise { title: string; minutes: string; steps: string[]; response_prompt: string }
 
 export interface GuidedLesson {
@@ -37,6 +43,9 @@ export interface GuidedLesson {
   check: GuidedCheck | null;
   questions: GuidedQuestion[];
   exercise: GuidedExercise | null;
+  /** Sequenced lessons: teaching pages and their own response screens, in the order they are shown. Empty for the older layout. */
+  screens: GuidedResponseScreen[];
+  steps: GuidedStep[];
 }
 
 export const MAX_REFLECTION_CHARS = 5000;
@@ -52,21 +61,41 @@ const strArray = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string =
 /** Blocks → the lesson model, in block order. Unknown or malformed pieces are skipped, never thrown on. */
 export function parseGuidedLesson(blocks: RawBlock[]): GuidedLesson {
   const sorted = [...blocks].sort((a, b) => a.order_index - b.order_index);
-  const out: GuidedLesson = { intro: null, pages: [], check: null, questions: [], exercise: null };
+  const out: GuidedLesson = { intro: null, pages: [], check: null, questions: [], exercise: null, screens: [], steps: [] };
+  let current: GuidedResponseScreen | null = null;
   for (const b of sorted) {
     const c = b.content ?? {};
     switch (b.block_type) {
       case "guided_intro":
-        out.intro ??= { section_id: str(c.section_id), goal: str(c.goal), reading: strArray(c.reading), timing: str(c.timing), exercise_timing: str(c.exercise_timing), welcome: c.kind === "welcome" };
+        out.intro ??= { section_id: str(c.section_id), goal: str(c.goal), reading: strArray(c.reading), timing: str(c.timing), exercise_timing: str(c.exercise_timing), welcome: c.kind === "welcome", opening: c.opening !== false };
         break;
       case "guided_page":
-        if (str(c.title) || str(c.body)) out.pages.push({ page_id: str(c.page_id) || `page-${out.pages.length + 1}`, title: str(c.title), body: str(c.body) });
+        if (str(c.title) || str(c.body)) {
+          out.pages.push({ page_id: str(c.page_id) || `page-${out.pages.length + 1}`, title: str(c.title), body: str(c.body) });
+          out.steps.push({ kind: "page", index: out.pages.length - 1 });
+          current = null;
+        }
+        break;
+      case "guided_screen":
+        current = { screen_id: str(c.screen_id) || `screen-${out.screens.length + 1}`, label: str(c.label) || "Questions", title: str(c.title), for_page: str(c.for_page), items: [] };
+        out.screens.push(current);
+        out.steps.push({ kind: "responses", screen_id: current.screen_id });
+        break;
+      case "guided_note":
+        if (current && (str(c.title) || str(c.body))) current.items.push({ kind: "note", title: str(c.title), body: str(c.body) });
         break;
       case "guided_check":
         out.check ??= { check_id: str(c.check_id) || "check", prompt: str(c.prompt), options: strArray(c.options) };
         break;
       case "guided_question":
-        if (str(c.prompt)) out.questions.push({ question_id: str(c.question_id) || `q${out.questions.length + 1}`, type: str(c.type) || "reflection", prompt: str(c.prompt) });
+        if (str(c.prompt)) {
+          const q: GuidedQuestion = { question_id: str(c.question_id) || `q${out.questions.length + 1}`, type: str(c.type) || "reflection", prompt: str(c.prompt) };
+          if (current) {
+            q.screen_id = current.screen_id;
+            current.items.push({ kind: "question", question_id: q.question_id });
+          }
+          out.questions.push(q);
+        }
         break;
       case "guided_exercise":
         out.exercise ??= { title: str(c.title) || "Practice", minutes: str(c.minutes), steps: strArray(c.steps), response_prompt: str(c.response_prompt) };
@@ -84,7 +113,13 @@ export type Screen =
   | { kind: "page"; index: number }
   | { kind: "questions" }
   | { kind: "exercise" }
+  | { kind: "responses"; id: string }
   | { kind: "submit" };
+
+/** True when the lesson shows each teaching page followed by its own response screen. */
+export function isSequenced(g: GuidedLesson): boolean {
+  return g.screens.length > 0;
+}
 
 /**
  * A welcome lesson (intro content.kind === "welcome") is read-only orientation: it has pages and
@@ -97,7 +132,13 @@ export function isWelcomeLesson(g: GuidedLesson): boolean {
 /** The ordered screens: opening, each teaching page, then (only if present) questions, practice, and finally review & submit. */
 export function buildScreens(g: GuidedLesson): Screen[] {
   if (isWelcomeLesson(g)) return g.pages.map((_, index) => ({ kind: "page" as const, index }));
-  const screens: Screen[] = [{ kind: "opening" }];
+  const screens: Screen[] = [];
+  if (g.intro?.opening !== false || !isSequenced(g)) screens.push({ kind: "opening" });
+  if (isSequenced(g)) {
+    for (const st of g.steps) screens.push(st.kind === "page" ? { kind: "page", index: st.index } : { kind: "responses", id: st.screen_id });
+    screens.push({ kind: "submit" });
+    return screens;
+  }
   g.pages.forEach((_, index) => screens.push({ kind: "page", index }));
   if (g.check || g.questions.length > 0) screens.push({ kind: "questions" });
   if (g.exercise) screens.push({ kind: "exercise" });
@@ -207,7 +248,7 @@ export interface GuidedSubmissionContent {
   contentVersion: number;
   sectionTitle: string;
   check: { id: string; prompt: string; options: string[]; choice: number | null; choiceText: string; correct: boolean | null } | null;
-  answers: { id: string; prompt: string; response: string }[];
+  answers: { id: string; prompt: string; response: string; group?: string }[];
   exercise: { title: string; steps: string[]; prompt: string; response: string } | null;
   submittedAt: string;
 }
@@ -233,7 +274,10 @@ export function buildSubmissionContent(g: GuidedLesson, lessonId: string, sectio
           correct: d.check.correct
         }
       : null,
-    answers: g.questions.map((q) => ({ id: q.question_id, prompt: q.prompt, response: (d.answers[q.question_id] ?? "").trim() })),
+    answers: g.questions.map((q) => {
+      const group = isSequenced(g) ? responseGroups(g).find((x) => x.questions.some((y) => y.question_id === q.question_id))?.title : undefined;
+      return { id: q.question_id, prompt: q.prompt, response: (d.answers[q.question_id] ?? "").trim(), ...(group ? { group } : {}) };
+    }),
     exercise: g.exercise ? { title: g.exercise.title, steps: g.exercise.steps, prompt: g.exercise.response_prompt, response: d.exercise.trim() } : null,
     submittedAt: now.toISOString()
   };
@@ -241,6 +285,85 @@ export function buildSubmissionContent(g: GuidedLesson, lessonId: string, sectio
 
 export function isGuidedSubmission(content: unknown): content is GuidedSubmissionContent {
   return !!content && typeof content === "object" && (content as any).kind === "guided_section" && Array.isArray((content as any).answers);
+}
+
+export interface ScreenInfo {
+  /** e.g. "Teaching: Praise", "Questions: Praise", "Review and submit" */
+  label: string;
+  /** "Teaching" | "Questions" | "Exercise" | … (the kind of step, for compact progress) */
+  kind: string;
+}
+
+/** Plain-language name of a screen, used for progress, announcements and the review list. */
+export function screenInfo(g: GuidedLesson, s: Screen): ScreenInfo {
+  switch (s.kind) {
+    case "opening": return { label: "Lesson opening", kind: "Opening" };
+    case "page": return { label: `Teaching: ${g.pages[s.index]?.title ?? ""}`, kind: "Teaching" };
+    case "responses": {
+      const r = g.screens.find((x) => x.screen_id === s.id);
+      return { label: r ? `${r.label}: ${r.title}` : "Questions", kind: r?.label ?? "Questions" };
+    }
+    case "questions": return { label: "Questions", kind: "Questions" };
+    case "exercise": return { label: g.exercise?.title ? `Practice: ${g.exercise.title}` : "Practice", kind: "Practice" };
+    default: return { label: "Review and submit", kind: "Submit" };
+  }
+}
+
+export interface ResponseGroup {
+  /** the teaching page's title (or the exercise's title when the screen stands alone) */
+  title: string;
+  screen_id: string;
+  questions: GuidedQuestion[];
+}
+
+/** The student's questions grouped under the teaching-page titles (sequenced lessons only). */
+export function responseGroups(g: GuidedLesson): ResponseGroup[] {
+  return g.screens
+    .map((sc) => {
+      const page = sc.for_page ? g.pages.find((p) => p.page_id === sc.for_page) : undefined;
+      const ids = new Set(sc.items.flatMap((i) => (i.kind === "question" ? [i.question_id] : [])));
+      return { title: page?.title ?? sc.title, screen_id: sc.screen_id, questions: g.questions.filter((q) => ids.has(q.question_id)) };
+    })
+    .filter((x) => x.questions.length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Lesson body text: paragraphs plus light markup the instructor can type
+//   "## Heading"            a sub-heading inside a page
+//   "* item"                a bullet list (one item per line)
+//   "> quoted line"         a Scripture quotation (one line per paragraph of the quote)
+//   "—Reference"            a source line (last line of a paragraph or of a quote)
+// ---------------------------------------------------------------------------
+export type BodyNode =
+  | { kind: "p"; lines: string[]; cite?: string }
+  | { kind: "h"; text: string }
+  | { kind: "list"; items: string[] }
+  | { kind: "quote"; lines: string[]; cite?: string };
+
+export function parseBody(body: string): BodyNode[] {
+  const nodes: BodyNode[] = [];
+  for (const block of body.split(/\n\s*\n/)) {
+    const raw = block.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");
+    if (raw.length === 0) continue;
+    if (raw.length === 1 && raw[0].startsWith("## ")) {
+      nodes.push({ kind: "h", text: raw[0].slice(3).trim() });
+      continue;
+    }
+    if (raw.every((l) => /^[*•] /.test(l))) {
+      nodes.push({ kind: "list", items: raw.map((l) => l.slice(2).trim()) });
+      continue;
+    }
+    const quoted = raw.every((l) => l === ">" || l.startsWith("> "));
+    let lines = quoted ? raw.map((l) => l.slice(1).trim()).filter(Boolean) : raw.map((l) => l.trim());
+    let cite: string | undefined;
+    const last = lines[lines.length - 1];
+    if (last && /^(—|--\s)/.test(last) && (lines.length > 1 || quoted)) {
+      cite = last.replace(/^--\s/, "—");
+      lines = lines.slice(0, -1);
+    }
+    nodes.push(quoted ? { kind: "quote", lines, cite } : { kind: "p", lines, cite });
+  }
+  return nodes;
 }
 
 /** Paragraphs for display: blank-line separated, single line breaks kept inside a paragraph. */

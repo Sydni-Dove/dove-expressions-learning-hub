@@ -31,6 +31,8 @@ const TYPE_LABEL: Record<string, string> = {
   prompt_card: "Copyable prompt",
   guided_intro: "Guided lesson — opening (goal, reading, timing)",
   guided_page: "Guided lesson — teaching page",
+  guided_screen: "Guided lesson — response screen (starts a questions/exercise screen)",
+  guided_note: "Guided lesson — note or exercise instructions (inside a response screen)",
   guided_check: "Guided lesson — knowledge check",
   guided_question: "Guided lesson — reflection question",
   guided_exercise: "Guided lesson — practice exercise",
@@ -55,6 +57,8 @@ const TYPE_ORDER = [
   "prompt_card",
   "guided_intro",
   "guided_page",
+  "guided_screen",
+  "guided_note",
   "guided_check",
   "guided_question",
   "guided_exercise",
@@ -126,6 +130,10 @@ function defaultContent(type: string): Record<string, any> {
       return { section_id: "", goal: "", reading: [], timing: "", exercise_timing: "" };
     case "guided_page":
       return { page_id: "", title: "", body: "" };
+    case "guided_screen":
+      return { screen_id: "", label: "Questions", title: "", for_page: "" };
+    case "guided_note":
+      return { title: "", body: "" };
     case "guided_check":
       return { check_id: "check", prompt: "", options: ["", "", ""] };
     case "guided_question":
@@ -183,6 +191,10 @@ function BlockSummary({ block }: { block: Block }) {
       return <p className="font-body text-sm text-charcoal/80">{c.goal ? c.goal : muted("No learning goal yet")} — {(c.reading?.length ?? 0)} reading(s)</p>;
     case "guided_page":
       return <p className="font-body text-sm text-charcoal/80"><strong>{c.title || "Untitled page"}</strong> — {c.body ? String(c.body).slice(0, 110) : muted("no text yet")}</p>;
+    case "guided_screen":
+      return <p className="font-body text-sm text-charcoal/80"><strong>{c.label || "Questions"}: {c.title || "Untitled"}</strong> — {c.for_page ? `follows page ${c.for_page}` : "stands alone"}</p>;
+    case "guided_note":
+      return <p className="font-body text-sm text-charcoal/80"><strong>{c.title || "Note"}</strong> {c.body ? `— ${String(c.body).slice(0, 100)}` : ""}</p>;
     case "guided_check":
       return <p className="font-body text-sm text-charcoal/80">{c.prompt || muted("No question yet")} — {(c.options?.length ?? 0)} option(s) · answer key {muted("is set under Edit")}</p>;
     case "guided_question":
@@ -400,6 +412,10 @@ function BlockForm({
           <label className="field-label">Core Scripture reading — one reference per line</label>
           <textarea defaultValue={(value.reading || []).join("\n")} onChange={(e) => set({ reading: linesToItems(e.target.value) })} rows={3} className="w-full input" />
         </div>
+        <label className="flex items-center gap-2 font-ui text-sm text-charcoal/80">
+          <input type="checkbox" checked={value.opening !== false} onChange={(e) => set({ opening: e.target.checked })} />
+          Show a separate opening screen (uncheck to start straight on the first teaching page)
+        </label>
         <input value={value.timing || ""} onChange={(e) => set({ timing: e.target.value })} placeholder="Teaching time estimate, e.g. 5-10 including reading and pauses" className="w-full input" />
         <input value={value.exercise_timing || ""} onChange={(e) => set({ exercise_timing: e.target.value })} placeholder="Practice time estimate, e.g. 10-25" className="w-full input" />
         <p className="font-ui text-xs text-charcoal/50">Timing is an estimate. Students are never told a fixed time per page.</p>
@@ -412,7 +428,28 @@ function BlockForm({
       <>
         <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Page title" className="w-full input" />
         <textarea value={value.body || ""} onChange={(e) => set({ body: e.target.value })} placeholder="Page text — separate paragraphs with a blank line" rows={12} className="w-full input" />
+        <p className="font-ui text-xs text-charcoal/50">Optional formatting: start a line with <code>## </code> for a sub-heading, <code>&gt; </code> for a Scripture quotation, <code>* </code> for a bullet, and <code>—</code> for a source line.</p>
         <p className="font-ui text-xs text-charcoal/50">Shown to students as one screen. Move pages up or down in the list to change their order.</p>
+      </>
+    );
+  }
+
+  if (type === "guided_screen") {
+    return (
+      <>
+        <input value={value.label || ""} onChange={(e) => set({ label: e.target.value })} placeholder="Label, e.g. Questions, Questions and Exercise, Exercise" className="w-full input" />
+        <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Screen title, e.g. Praise / Psalm 34" className="w-full input" />
+        <input value={value.for_page || ""} onChange={(e) => set({ for_page: e.target.value })} placeholder="Teaching page ID this screen belongs to (e.g. page-1) — leave blank if it stands alone" className="w-full input" />
+        <p className="font-ui text-xs text-charcoal/50">Put this block right after its teaching page. The notes and questions listed after it (until the next page or screen) appear on this one screen.</p>
+      </>
+    );
+  }
+
+  if (type === "guided_note") {
+    return (
+      <>
+        <input value={value.title || ""} onChange={(e) => set({ title: e.target.value })} placeholder="Heading, e.g. Exercise: Read All of Psalm 34" className="w-full input" />
+        <textarea value={value.body || ""} onChange={(e) => set({ body: e.target.value })} placeholder="Instructions shown above the next questions" rows={4} className="w-full input" />
       </>
     );
   }
@@ -522,6 +559,8 @@ function validate(type: string, content: Record<string, any>): string | null {
     if ((content.options || []).filter((o: string) => (o || "").trim()).length < 2) return "Add at least two answer options.";
   }
   if (type === "guided_question" && !(content.prompt || "").trim()) return "Add the reflection question.";
+  if (type === "guided_screen" && !(content.title || "").trim()) return "Add a screen title.";
+  if (type === "guided_note" && !(content.title || "").trim() && !(content.body || "").trim()) return "Add a heading or text.";
   if (type === "guided_exercise" && (!(content.title || "").trim() || (content.steps || []).length === 0)) return "Add an exercise title and at least one step.";
   if (type === "guided_intro" && !(content.goal || "").trim()) return "Add the learning goal.";
   if (type === "teaching_section" && (!(content.heading || "").trim() || (content.paragraphs || []).length === 0)) return "Add a heading and at least one paragraph.";
@@ -536,6 +575,12 @@ function withGuidedIds(type: string, content: Record<string, any>, existing: Blo
     let n = used.size + 1;
     while (used.has(`page-${n}`)) n++;
     return { ...content, page_id: `page-${n}` };
+  }
+  if (type === "guided_screen" && !content.screen_id) {
+    const used = new Set(existing.filter((b) => b.block_type === "guided_screen").map((b) => b.content?.screen_id));
+    let n = used.size + 1;
+    while (used.has(`screen-${n}`)) n++;
+    return { ...content, screen_id: `screen-${n}` };
   }
   if (type === "guided_question" && !content.question_id) {
     const used = new Set(existing.filter((b) => b.block_type === "guided_question").map((b) => b.content?.question_id));

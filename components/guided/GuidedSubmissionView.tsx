@@ -25,7 +25,10 @@ export default function GuidedSubmissionView({ content }: { content: GuidedSubmi
 
       {content.answers.map((a, i) => (
         <div key={a.id}>
-          <h3 className="font-ui text-xs font-bold uppercase tracking-wide text-sunrise-dark">Reflection {i + 1}</h3>
+          {a.group && (i === 0 || content.answers[i - 1].group !== a.group) && (
+            <h3 className="mb-2 mt-2 border-b border-charcoal/10 pb-1 font-display text-lg text-burgundy" data-testid="answer-group">{a.group}</h3>
+          )}
+          <h3 className="font-ui text-xs font-bold uppercase tracking-wide text-sunrise-dark">{a.group ? `Question ${content.answers.slice(0, i).filter((x) => x.group === a.group).length + 1}` : `Reflection ${i + 1}`}</h3>
           <p className="mt-1 font-body text-sm font-semibold text-charcoal/85">{a.prompt}</p>
           <p className="mt-1 whitespace-pre-line rounded-control border border-charcoal/10 bg-white p-3 font-body text-sm text-charcoal/85">{a.response || "No answer."}</p>
         </div>
