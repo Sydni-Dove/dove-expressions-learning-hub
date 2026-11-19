@@ -81,7 +81,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
             {mod.description && <p className="mt-1 font-body text-sm text-charcoal/70">{mod.description}</p>}
             <ul className="mt-4 divide-y divide-charcoal/10">
               {(lessons ?? [])
-                .filter((l) => l.module_id === mod.id && l.status === "published")
+                .filter((l) => l.module_id === mod.id && (l.status === "published" || isStaff))
                 .map((l) => {
                   const done = completedIds.has(l.id);
                   return (
@@ -100,6 +100,7 @@ export default async function CourseDetailPage({ params }: { params: { courseId:
                             {done ? "✓" : ""}
                           </span>
                           {l.title}
+                          {l.status !== "published" && <span className="rounded-full bg-gold/20 px-2 py-0.5 font-ui text-[11px] uppercase tracking-wide text-charcoal/70">{l.status} · staff only</span>}
                         </span>
                         {l.estimated_duration_minutes && (
                           <span className="shrink-0 font-ui text-xs text-charcoal/50">{l.estimated_duration_minutes} min</span>
