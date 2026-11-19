@@ -67,7 +67,10 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
   const supabase = useMemo(() => createClient(), []);
   const screens = useMemo(() => buildScreens(guided), [guided]);
 
-  const status: SubmissionStatus | null = submission?.status ?? null;
+  // Reflect a successful submit immediately; the server data (props) takes over after the refresh.
+  const [localStatus, setLocalStatus] = useState<SubmissionStatus | null>(null);
+  useEffect(() => setLocalStatus(null), [submission?.status]);
+  const status: SubmissionStatus | null = localStatus ?? submission?.status ?? null;
   const locked = !studentCanEdit(status);
 
   // Starting point: a locked (submitted/approved) lesson shows what was submitted; a returned one
@@ -230,6 +233,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
       return;
     }
     setConfirming(false);
+    setLocalStatus(submission ? "revised" : "submitted");
     router.refresh();
   }
 
@@ -275,7 +279,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
     <div className="mx-auto w-full max-w-2xl px-4 pb-32 pt-4 sm:px-6" data-testid="guided-flow">
       <header className="mb-4">
         <div className="flex items-center justify-between gap-3">
-          <Link href={`/courses/${courseId}`} className="font-ui text-sm text-charcoal/60 underline">← {courseTitle}</Link>
+          <Link href={`/courses/${courseId}`} className="inline-flex min-h-[44px] items-center font-ui text-sm text-charcoal/60 underline">← {courseTitle}</Link>
           <span className="font-ui text-xs uppercase tracking-wide text-charcoal/50">Section {position.index} of {position.total}</span>
         </div>
         <ol className="mt-3 flex gap-1.5" aria-label="Lesson steps">
@@ -361,7 +365,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
           <section aria-labelledby="screen-title" data-testid="screen-questions">
             <h1 id="screen-title" ref={headingRef} tabIndex={-1} className="font-display text-2xl text-burgundy outline-none sm:text-3xl">Questions</h1>
             <p className="mt-1 font-body text-sm text-charcoal/70">Your answers save as a private draft. You can go back to the teaching at any time without losing them.</p>
-            <button type="button" onClick={() => goTo(1)} className="mt-2 font-ui text-sm text-burgundy underline">Review the teaching pages</button>
+            <button type="button" onClick={() => goTo(1)} className="mt-1 inline-flex min-h-[44px] items-center font-ui text-sm text-burgundy underline">Review the teaching pages</button>
 
             {guided.check && (
               <fieldset className="card mt-5 p-4 sm:p-5" disabled={locked} data-testid="knowledge-check">

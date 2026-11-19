@@ -81,6 +81,13 @@ export default async function LessonPage({ params }: { params: { courseId: strin
 
   // Guided lessons (one screen at a time) have their own experience. Every other lesson is unchanged.
   if (isGuidedLesson(blocks)) {
+    // Position among every lesson this viewer may see (students: published only; instructors: drafts too,
+    // so an instructor previewing a draft course still gets real "Section x of y" and Next/Previous).
+    const { data: visibleLessons } = moduleIds.length
+      ? await supabase.from("dp_lessons").select("id,module_id,order_index,status").in("module_id", moduleIds)
+      : { data: [] };
+    const guidedOrder = orderPublishedLessons(allModules ?? [], (visibleLessons ?? []).map((l: any) => ({ ...l, status: "published" })));
+    const guidedNeighbors = computeLessonNeighbors(guidedOrder, lesson.id);
     const { data: assignmentRows } = await supabase
       .from("dp_assignments")
       .select("id")
@@ -117,9 +124,9 @@ export default async function LessonPage({ params }: { params: { courseId: strin
         feedback={(feedback ?? []) as any[]}
         resources={(resources ?? []) as any[]}
         isStaffPreview={isStaff}
-        position={{ index: lessonPosition, total: totalLessons }}
-        nextLessonId={neighbors.nextId}
-        prevLessonId={neighbors.previousId}
+        position={{ index: guidedNeighbors.position, total: guidedNeighbors.total }}
+        nextLessonId={guidedNeighbors.nextId}
+        prevLessonId={guidedNeighbors.previousId}
         lessonCompleted={isComplete}
       />
     );
