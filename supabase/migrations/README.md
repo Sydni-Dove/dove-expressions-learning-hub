@@ -65,3 +65,11 @@ are untouched by every migration above. See `../../04-database-schema.md`
 for the v1 entity-relationship writeup and `../../06-safety-and-recovery.md`
 for the full migration inventory, rollback path, and the reasoning for
 applying additively to production instead of a staging branch.
+
+## Guided lessons (Nov 2026)
+
+- `20261119130000_dp_v7_guided_lessons.sql` — guided-lesson blocks, private answer keys, drafts, course
+  resources, and the staff import function. Applied live as `dp_v7_guided_lessons`.
+- `20261119190000_dp_v8_guided_sequenced_sections.sql` — `dp_replace_guided_section`: replaces ONE lesson's
+  screens so each teaching page is followed by its own questions/exercise. Adds a function only; no data
+  changes. Applied live as `dp_v8_guided_sequenced_sections` (the live name omits the timestamp).

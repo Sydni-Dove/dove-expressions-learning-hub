@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { EmptyState, Pill } from "@/components/ui";
 import FeedbackForm from "@/components/FeedbackForm";
+import GuidedSubmissionView from "@/components/guided/GuidedSubmissionView";
+import { isGuidedSubmission } from "@/lib/guided-lesson";
 
 export default async function SubmissionReviewPage({ params }: { params: { submissionId: string } }) {
   const supabase = createClient();
@@ -45,7 +47,11 @@ export default async function SubmissionReviewPage({ params }: { params: { submi
 
       <div className="card p-5">
         <h2 className="font-display text-lg text-burgundy">Response</h2>
-        <p className="mt-2 whitespace-pre-line font-body text-sm text-charcoal/80">{content.response || "No written response."}</p>
+        {isGuidedSubmission(content) ? (
+          <div className="mt-3"><GuidedSubmissionView content={content} /></div>
+        ) : (
+          <p className="mt-2 whitespace-pre-line font-body text-sm text-charcoal/80">{content.response || "No written response."}</p>
+        )}
         {(submission.file_urls ?? []).length > 0 && (
           <ul className="mt-3 space-y-1">
             {submission.file_urls.map((u: string) => (

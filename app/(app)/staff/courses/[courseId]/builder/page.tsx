@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/ui";
 import CourseEditFields from "@/components/CourseEditFields";
 import { getCourseSettingsRaw } from "@/lib/course-access";
 import ModulesEditor from "@/components/ModulesEditor";
+import CourseResourcesPanel from "@/components/CourseResourcesPanel";
 
 export default async function CourseBuilderPage({ params }: { params: { courseId: string } }) {
   const supabase = createClient();
@@ -26,6 +27,12 @@ export default async function CourseBuilderPage({ params }: { params: { courseId
     .select("id,title,order_index,dp_lessons(id,title,status)")
     .eq("course_id", courseId)
     .order("order_index");
+
+  const { data: resources } = await supabase
+    .from("dp_course_resources")
+    .select("id,kind,title,file_name,version,is_active")
+    .eq("course_id", courseId)
+    .order("created_at", { ascending: true });
 
   const modulesForEditor = (modules ?? []).map((m: any) => ({
     id: m.id,
@@ -69,6 +76,8 @@ export default async function CourseBuilderPage({ params }: { params: { courseId
         initialLessonStyle={rawSettings?.lesson_style ?? "reflective"}
         settingsAvailable={!!rawSettings}
       />
+
+      <CourseResourcesPanel courseId={course.id} resources={(resources ?? []) as any[]} />
 
       <div>
         <h2 className="font-display text-xl text-burgundy">Modules &amp; lessons</h2>

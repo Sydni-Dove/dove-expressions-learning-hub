@@ -26,22 +26,17 @@ export default function FeedbackForm({ submissionId, authorId }: { submissionId:
     setSaving(true);
     setError(null);
 
-    const { error: feedbackError } = await supabase.from("dp_feedback").insert({
-      submission_id: submissionId,
-      author_id: authorId,
-      content: content.trim(),
-      is_private: false
+    // The database's own review rule: publishes the feedback, sets the outcome, and (once every
+    // assignment on the lesson is approved or exempt) records the lesson as complete — atomically.
+    // Only authorized instructors pass this check; students can never reach it.
+    const { error: reviewError } = await supabase.rpc("dp_review_submission", {
+      target_id: submissionId,
+      feedback_text: content.trim(),
+      next_status: status
     });
-    if (feedbackError) {
-      setSaving(false);
-      setError(feedbackError.message);
-      return;
-    }
-
-    const { error: statusError } = await supabase.from("dp_submissions").update({ status }).eq("id", submissionId);
     setSaving(false);
-    if (statusError) {
-      setError(statusError.message);
+    if (reviewError) {
+      setError(reviewError.message);
       return;
     }
 

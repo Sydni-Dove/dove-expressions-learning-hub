@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCurrentUserAndRoles } from "@/lib/roles";
 import { EmptyState, Pill } from "@/components/ui";
+import Link from "next/link";
 import SubmissionForm from "@/components/SubmissionForm";
 
 export default async function AssignmentsPage() {
@@ -27,7 +28,7 @@ export default async function AssignmentsPage() {
 
   const { data: assignments } = await supabase
     .from("dp_assignments")
-    .select("id,title,description,assignment_type,due_at,pillars,assigned_to_user_id")
+    .select("id,title,description,assignment_type,due_at,pillars,assigned_to_user_id,course_id,lesson_id")
     .or(orClauses.join(","))
     .order("due_at", { ascending: true });
 
@@ -37,6 +38,14 @@ export default async function AssignmentsPage() {
     .eq("student_id", user!.id);
 
   const submissionFor = (assignmentId: string) => submissions?.find((s) => s.assignment_id === assignmentId);
+
+  // Assignments that belong to a guided lesson are completed (and saved) inside that lesson, so a
+  // generic text box here would bypass it. Link to the lesson instead.
+  const lessonIds = (assignments ?? []).map((a: any) => a.lesson_id).filter(Boolean) as string[];
+  const { data: guidedRows } = lessonIds.length
+    ? await supabase.from("dp_lesson_blocks").select("lesson_id").eq("block_type", "guided_page").in("lesson_id", lessonIds)
+    : { data: [] as { lesson_id: string }[] };
+  const guidedLessonIds = new Set((guidedRows ?? []).map((r) => r.lesson_id));
 
   return (
     <div className="max-w-2xl space-y-4 pb-16">
@@ -58,7 +67,13 @@ export default async function AssignmentsPage() {
             </div>
             <h2 className="mt-2 font-display text-lg text-burgundy">{a.title}</h2>
             {a.description && <p className="mt-1 font-body text-sm text-charcoal/70">{a.description}</p>}
-            {!sub && <SubmissionForm assignmentId={a.id} studentId={user!.id} />}
+            {a.lesson_id && guidedLessonIds.has(a.lesson_id) ? (
+              <Link href={`/courses/${a.course_id}/lessons/${a.lesson_id}`} className="btn-secondary mt-3 inline-flex">
+                {sub ? "Open the lesson" : "Open the lesson to complete this"} →
+              </Link>
+            ) : (
+              !sub && <SubmissionForm assignmentId={a.id} studentId={user!.id} />
+            )}
           </div>
         );
       })}
