@@ -595,7 +595,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
             )}
 
             <div className="mt-6 flex flex-wrap gap-3">
-              {nextLessonId && <Link href={`/courses/${courseId}/lessons/${nextLessonId}`} className="btn-secondary">Go to the next section →</Link>}
+              {nextLessonId && <NextSectionLink href={`/courses/${courseId}/lessons/${nextLessonId}`} className="btn-secondary" label="Go to the next section" testId="next-section-inline" />}
               <Link href={`/courses/${courseId}`} className="btn-secondary">Back to the course</Link>
             </div>
             <div className="mt-6">{workbook}</div>
@@ -623,12 +623,40 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
             <button type="button" className="btn-primary" onClick={() => go(1)} aria-label="Go to the next screen" data-testid="next">{nextLabel} →</button>
           ) : welcome && nextLessonId ? (
             <Link href={`/courses/${courseId}/lessons/${nextLessonId}`} className="btn-primary" data-testid="welcome-begin">Begin the course →</Link>
+          ) : nextLessonId ? (
+            <NextSectionLink href={`/courses/${courseId}/lessons/${nextLessonId}`} className="btn-primary" label="Next section" testId="next-section" />
           ) : (
             <span className="w-[84px]" aria-hidden="true" />
           )}
         </div>
       </nav>
     </div>
+  );
+}
+
+/**
+ * A link to the next section that answers the first tap at once and ignores repeat taps while the
+ * next section loads, so a slow connection can't send a student past the section they wanted.
+ */
+function NextSectionLink({ href, className, label, testId }: { href: string; className: string; label: string; testId: string }) {
+  const [opening, setOpening] = useState(false);
+  return (
+    <Link
+      href={href}
+      className={`${className} ${opening ? "pointer-events-none opacity-70" : ""}`}
+      aria-disabled={opening || undefined}
+      aria-label={opening ? "Opening the next section" : `${label}`}
+      data-testid={testId}
+      onClick={(e) => {
+        if (opening) {
+          e.preventDefault();
+          return;
+        }
+        setOpening(true);
+      }}
+    >
+      {opening ? "Opening…" : `${label} →`}
+    </Link>
   );
 }
 
