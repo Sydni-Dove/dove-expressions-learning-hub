@@ -18,6 +18,7 @@ import {
   minutesLabel,
   normalizeDraft,
   responseGroups,
+  resumeScreen,
   screenInfo,
   studentCanEdit,
   validateForSubmit,
@@ -86,10 +87,7 @@ export default function GuidedLessonFlow(props: GuidedLessonFlowProps) {
     return normalizeDraft(props.initialDraft, contentVersion);
   });
   // A saved place only means something in the structure it was saved under: after the lesson is updated, start again at the first screen (answers are kept).
-  const [screenIndex, setScreenIndex] = useState(() => {
-    const saved = normalizeDraft(props.initialDraft, contentVersion);
-    return clampScreen(locked || saved.contentVersion !== contentVersion ? 0 : saved.screen, screens.length);
-  });
+  const [screenIndex, setScreenIndex] = useState(() => (locked ? 0 : resumeScreen(guided, screens, normalizeDraft(props.initialDraft, contentVersion), contentVersion)));
   const [save, setSave] = useState<SaveState>({ kind: "saved", at: null });
   const [checkResult, setCheckResult] = useState<{ choice: number; correct: boolean; feedback: string } | null>(null);
   const [checking, setChecking] = useState(false);

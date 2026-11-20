@@ -145,6 +145,21 @@ describe("sequenced student flow", () => {
     expect(screen.getByTestId("step-counter")).toHaveTextContent("Step 4 of 6");
   });
 
+  it("a saved place with no work in it (just clicking through) opens at the start, not on Review", () => {
+    render(<GuidedLessonFlow {...base({ initialDraft: { v: 1, contentVersion: 3, screen: 5, check: { choice: null, correct: null }, answers: {}, exercise: "" } })} />);
+    expect(screen.getByTestId("step-counter")).toHaveTextContent("Step 1 of 6");
+  });
+
+  it("a saved place on Review with questions still unanswered goes to the first unanswered screen", () => {
+    render(<GuidedLessonFlow {...base({ initialDraft: { v: 1, contentVersion: 3, screen: 5, check: { choice: null, correct: null }, answers: { a1: "x", a2: "y", b1: "z" }, exercise: "" } })} />);
+    expect(screen.getByTestId("step-counter")).toHaveTextContent("Step 4 of 6"); // Page Two's questions: b2 is blank
+  });
+
+  it("a complete draft saved on Review still reopens on Review", () => {
+    render(<GuidedLessonFlow {...base({ initialDraft: { v: 1, contentVersion: 3, screen: 5, check: { choice: null, correct: null }, answers: { a1: "1", a2: "2", b1: "3", b2: "4", c1: "5" }, exercise: "" } })} />);
+    expect(screen.getByTestId("step-counter")).toHaveTextContent("Step 6 of 6");
+  });
+
   it("a place saved under an older version of the lesson starts again at the first screen, keeping the answers", () => {
     render(<GuidedLessonFlow {...base({ initialDraft: { v: 1, contentVersion: 2, screen: 5, check: { choice: null, correct: null }, answers: { a1: "kept answer" }, exercise: "" } })} />);
     expect(screen.getByTestId("step-counter")).toHaveTextContent("Step 1 of 6");
@@ -154,6 +169,7 @@ describe("sequenced student flow", () => {
 
   it("review & submit groups every response under its page title, with an Edit link back, and blocks submit until all are answered", () => {
     render(<GuidedLessonFlow {...base({ initialDraft: { v: 1, contentVersion: 3, screen: 5, check: { choice: null, correct: null }, answers: { a1: "A", a2: "B", b1: "C", c1: "E" }, exercise: "" } })} />);
+    next(); next(); // opens on the first unanswered screen; walk on to Review
     const groups = screen.getAllByTestId("review-group");
     expect(groups.map((g) => within(g).getByRole("heading", { level: 2 }).textContent)).toEqual(["Page One", "Page Two", "Stand alone"]);
     expect(within(groups[1]).getByText(/Not answered yet/)).toBeInTheDocument();
