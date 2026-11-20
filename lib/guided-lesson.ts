@@ -146,6 +146,30 @@ export function buildScreens(g: GuidedLesson): Screen[] {
   return screens;
 }
 
+/** True when the draft holds anything the student actually did (an answer, a check choice, an exercise response). */
+export function draftHasWork(d: GuidedDraft): boolean {
+  return d.check.choice !== null || d.exercise.trim() !== "" || Object.values(d.answers).some((v) => v.trim() !== "");
+}
+
+/**
+ * Where to open a lesson. A saved place is only honoured when real work was saved (clicking through the
+ * pages does not count), and it never lands on "Review and submit" while something is still unanswered:
+ * it goes to the first screen that has an unanswered question instead.
+ */
+export function resumeScreen(g: GuidedLesson, screens: Screen[], saved: GuidedDraft, contentVersion: number): number {
+  if (saved.contentVersion !== contentVersion || !draftHasWork(saved)) return 0;
+  const idx = clampScreen(saved.screen, screens.length);
+  if (screens[idx]?.kind !== "submit" || validateForSubmit(g, saved).ok) return idx;
+  const answered = (id: string) => (saved.answers[id] ?? "").trim() !== "";
+  const first = screens.findIndex((s) => {
+    if (s.kind === "responses") return g.screens.find((x) => x.screen_id === s.id)?.items.some((i) => i.kind === "question" && !answered(i.question_id)) ?? false;
+    if (s.kind === "questions") return (!!g.check && saved.check.choice === null) || g.questions.some((q) => !answered(q.question_id));
+    if (s.kind === "exercise") return saved.exercise.trim() === "";
+    return false;
+  });
+  return first >= 0 ? first : idx;
+}
+
 export function clampScreen(i: unknown, total: number): number {
   const n = typeof i === "number" && Number.isFinite(i) ? Math.trunc(i) : 0;
   return Math.min(Math.max(n, 0), Math.max(total - 1, 0));
